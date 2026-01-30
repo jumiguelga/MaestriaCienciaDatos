@@ -1,3 +1,13 @@
+# Fundamentos Ciencia de Datos - EAFIT
+## Taller 1 - EDA
+
+### Participantes
+1. Andrés Felipe Velasco Hernández
+2. Juan Miguel Gómez Alzate
+
+### Materia
+Fundamentos De la Ciencia de Datos
+
 # Taller 01 – Análisis Exploratorio de Datos (EDA)
 ## Gaming Hours vs Academic and Work Performance
 
