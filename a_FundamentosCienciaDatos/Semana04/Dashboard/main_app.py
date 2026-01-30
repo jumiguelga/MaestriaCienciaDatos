@@ -52,85 +52,122 @@ else:
     #     pass
 
 if df is not None:
-    # Basic Information
-    st.header("1. Información General del Dataset")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Primeras filas")
-        st.dataframe(df.head())
+    # Navigation
+    tab1, tab2, tab3 = st.tabs(["Análisis Cuantitativo", "Análisis Cualitativo", "Gráficos Interactivos"])
+
+    with tab1:
+        st.header("Análisis Cuantitativo")
         
-    with col2:
-        st.subheader("Resumen estadístico")
+        st.subheader("Resumen Estadístico")
         st.dataframe(df.describe())
 
-    st.subheader("Información de columnas y tipos de datos")
-    buffer = io.StringIO()
-    df.info(buf=buffer)
-    s = buffer.getvalue()
-    st.text(s)
-
-    # Visualizations
-    st.header("2. Visualizaciones")
-
-    # Technology distribution
-    if 'Tecnologia' in df.columns:
-        st.subheader("Distribución por Tecnología")
-        fig_tech = px.pie(df, names='Tecnologia', title='Proporción de Proyectos por Tecnología', hole=0.3)
-        st.plotly_chart(fig_tech, use_container_width=True)
-
-    # Capacity by Technology
-    if 'Tecnologia' in df.columns and 'Capacidad_Instalada_MW' in df.columns:
-        st.subheader("Capacidad Instalada por Tecnología")
-        fig_cap = px.box(df, x='Tecnologia', y='Capacidad_Instalada_MW', color='Tecnologia',
-                         title='Distribución de Capacidad Instalada (MW) por Tecnología')
-        st.plotly_chart(fig_cap, use_container_width=True)
-
-    # Generation vs Capacity
-    if 'Capacidad_Instalada_MW' in df.columns and 'Generacion_Diaria_MWh' in df.columns:
-        st.subheader("Generación Diaria vs Capacidad Instalada")
-        color_col = 'Tecnologia' if 'Tecnologia' in df.columns else None
-        size_col = 'Inversion_Inicial_MUSD' if 'Inversion_Inicial_MUSD' in df.columns else None
-        hover_col = 'ID_Proyecto' if 'ID_Proyecto' in df.columns else None
+        st.subheader("Matriz de Correlación")
+        numeric_df = df.select_dtypes(include=['float64', 'int64'])
+        if not numeric_df.empty:
+            fig_corr, ax_corr = plt.subplots(figsize=(10, 8))
+            sns.heatmap(numeric_df.corr(), annot=True, cmap='coolwarm', fmt=".2f", ax=ax_corr)
+            st.pyplot(fig_corr)
+        else:
+            st.write("No hay suficientes datos numéricos para una matriz de correlación.")
         
-        fig_scatter = px.scatter(df, x='Capacidad_Instalada_MW', y='Generacion_Diaria_MWh', 
-                                 color=color_col, size=size_col,
-                                 hover_name=hover_col, title='Relación entre Capacidad y Generación')
-        st.plotly_chart(fig_scatter, use_container_width=True)
+        if not numeric_df.empty:
+            st.subheader("Distribución de Variables Numéricas")
+            selected_num_col = st.selectbox("Selecciona una variable para ver su distribución", numeric_df.columns)
+            fig_hist = px.histogram(df, x=selected_num_col, marginal="box", title=f"Distribución de {selected_num_col}")
+            st.plotly_chart(fig_hist, use_container_width=True)
 
-    # Status count
-    if 'Estado_Actual' in df.columns:
-        st.subheader("Estado Actual de los Proyectos")
-        status_counts = df['Estado_Actual'].value_counts().reset_index()
-        status_counts.columns = ['Estado', 'Cantidad']
-        fig_status = px.bar(status_counts, x='Estado', y='Cantidad',
-                            title='Cantidad de Proyectos por Estado Actual')
-        st.plotly_chart(fig_status, use_container_width=True)
+    with tab2:
+        st.header("Análisis Cualitativo")
+        
+        st.subheader("Información General")
+        col_info1, col_info2 = st.columns(2)
+        with col_info1:
+            st.write(f"**Total de Registros:** {df.shape[0]}")
+            st.write(f"**Total de Columnas:** {df.shape[1]}")
+        with col_info2:
+            st.write(f"**Valores Nulos Totales:** {df.isnull().sum().sum()}")
 
-    # Efficiency analysis
-    if 'Eficiencia_Planta_Pct' in df.columns:
-        st.subheader("Análisis de Eficiencia")
-        color_eff = 'Operador' if 'Operador' in df.columns else None
-        fig_eff = px.histogram(df, x='Eficiencia_Planta_Pct', color=color_eff, barmode='overlay',
-                               title='Distribución de Eficiencia de Planta')
-        st.plotly_chart(fig_eff, use_container_width=True)
+        st.subheader("Primeras Filas")
+        st.dataframe(df.head())
 
-    # Time series
-    if 'Fecha_Entrada_Operacion' in df.columns and 'Inversion_Inicial_MUSD' in df.columns:
-        st.subheader("Evolución de la Inversión en el Tiempo")
-        df_time = df.sort_values('Fecha_Entrada_Operacion')
-        fig_time = px.line(df_time, x='Fecha_Entrada_Operacion', y='Inversion_Inicial_MUSD',
-                           title='Inversión Inicial a lo largo del Tiempo')
-        st.plotly_chart(fig_time, use_container_width=True)
+        st.subheader("Tipos de Datos y Valores No Nulos")
+        buffer = io.StringIO()
+        df.info(buf=buffer)
+        st.text(buffer.getvalue())
 
-    # Correlation Matrix
-    st.subheader("Matriz de Correlación")
-    numeric_df = df.select_dtypes(include=['float64', 'int64'])
-    if not numeric_df.empty:
-        fig, ax = plt.subplots(figsize=(10, 8))
-        sns.heatmap(numeric_df.corr(), annot=True, cmap='coolwarm', fmt=".2f", ax=ax)
-        st.pyplot(fig)
-    else:
-        st.write("No hay suficientes datos numéricos para una matriz de correlación.")
+        # Categorical Analysis
+        categorical_cols = df.select_dtypes(include=['object', 'category', 'bool']).columns
+        if not categorical_cols.empty:
+            st.subheader("Resumen de Variables Categóricas")
+            selected_cat_col = st.selectbox("Selecciona una variable categórica", categorical_cols)
+            
+            cat_counts = df[selected_cat_col].value_counts().reset_index()
+            cat_counts.columns = [selected_cat_col, 'Cantidad']
+            
+            col_cat1, col_cat2 = st.columns([1, 2])
+            with col_cat1:
+                st.dataframe(cat_counts)
+            with col_cat2:
+                fig_cat = px.bar(cat_counts, x=selected_cat_col, y='Cantidad', 
+                                 title=f"Frecuencia de {selected_cat_col}",
+                                 color=selected_cat_col)
+                st.plotly_chart(fig_cat, use_container_width=True)
+
+    with tab3:
+        st.header("Gráficos Interactivos")
+        
+        st.sidebar.subheader("Filtros de Datos")
+        filtered_df = df.copy()
+        
+        # Dynamic Filters based on data
+        if 'Tecnologia' in df.columns:
+            tech_filter = st.sidebar.multiselect("Filtrar por Tecnología", options=df['Tecnologia'].unique(), default=df['Tecnologia'].unique())
+            filtered_df = filtered_df[filtered_df['Tecnologia'].isin(tech_filter)]
+            
+        if 'Estado_Actual' in df.columns:
+            status_filter = st.sidebar.multiselect("Filtrar por Estado", options=df['Estado_Actual'].unique(), default=df['Estado_Actual'].unique())
+            filtered_df = filtered_df[filtered_df['Estado_Actual'].isin(status_filter)]
+
+        # Dynamic Scatter Plot
+        st.subheader("Explorador de Relaciones (Scatter Plot)")
+        numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns.tolist()
+        
+        if len(numeric_cols) >= 2:
+            col_sc1, col_sc2, col_sc3 = st.columns(3)
+            with col_sc1:
+                x_axis = st.selectbox("Eje X", numeric_cols, index=0)
+            with col_sc2:
+                y_axis = st.selectbox("Eje Y", numeric_cols, index=1 if len(numeric_cols) > 1 else 0)
+            with col_sc3:
+                color_by = st.selectbox("Color por", ['Ninguno'] + list(df.columns))
+            
+            fig_dynamic = px.scatter(filtered_df, x=x_axis, y=y_axis, 
+                                     color=color_by if color_by != 'Ninguno' else None,
+                                     hover_data=df.columns,
+                                     title=f"Relación entre {x_axis} y {y_axis}")
+            st.plotly_chart(fig_dynamic, use_container_width=True)
+        
+        # Specific predefined but interactive charts
+        st.subheader("Análisis de Series Temporales")
+        date_cols = df.select_dtypes(include=['datetime64']).columns.tolist()
+        if date_cols and not numeric_df.empty:
+            sel_date = st.selectbox("Selecciona columna de fecha", date_cols)
+            sel_val = st.selectbox("Selecciona valor a graficar", numeric_cols)
+            
+            df_time = filtered_df.sort_values(sel_date)
+            fig_time = px.line(df_time, x=sel_date, y=sel_val, color='Tecnologia' if 'Tecnologia' in df.columns else None,
+                               title=f"Evolución de {sel_val} en el tiempo")
+            st.plotly_chart(fig_time, use_container_width=True)
+        else:
+            st.info("No se encontraron columnas de fecha para análisis temporal.")
+
+        # Boxplot analysis
+        st.subheader("Distribución por Categorías (Boxplot)")
+        if not categorical_cols.empty and not numeric_df.empty:
+            cat_box = st.selectbox("Categoría para el eje X", categorical_cols, key='box_cat')
+            num_box = st.selectbox("Variable numérica para el eje Y", numeric_cols, key='box_num')
+            fig_box = px.box(filtered_df, x=cat_box, y=num_box, color=cat_box,
+                             title=f"Distribución de {num_box} por {cat_box}")
+            st.plotly_chart(fig_box, use_container_width=True)
 else:
     st.write("Por favor, sube un archivo CSV para visualizar el análisis.")
