@@ -37,8 +37,8 @@ def load_data(file):
             if df[col].dtype == 'object':
                 try:
                     # Check if it's likely a date string (basic check)
-                    if df[col].str.contains('-').any() or df[col].str.contains('/').any():
-                        df[col] = pd.to_datetime(df[col], errors='ignore')
+                    if df[col].astype(str).str.contains('-').any() or df[col].astype(str).str.contains('/').any():
+                        df[col] = pd.to_datetime(df[col], errors='coerce')
                 except:
                     pass
         return df
