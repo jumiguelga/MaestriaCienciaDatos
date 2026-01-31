@@ -36,11 +36,32 @@ def load_data(file):
         for col in df.columns:
             if df[col].dtype == 'object':
                 try:
-                    # Check if it's likely a date string (basic check)
-                    if df[col].astype(str).str.contains('-').any() or df[col].astype(str).str.contains('/').any():
-                        df[col] = pd.to_datetime(df[col], errors='coerce')
+                    # Convert to string first to check content safely
+                    col_str = df[col].astype(str)
+                    if col_str.str.contains('-').any() or col_str.str.contains('/').any():
+                        # Try to convert to datetime
+                        temp_dates = pd.to_datetime(df[col], errors='coerce')
+                        # Only use if we actually found valid dates
+                        if temp_dates.notnull().any():
+                            df[col] = temp_dates
                 except:
                     pass
+        
+        # Final sanitization for Streamlit/Arrow compatibility
+        # mixed-type 'object' columns or columns with pandas Timestamps in object dtype
+        # are the main cause of "pyarrow.lib.ArrowInvalid: tried to convert to int64"
+        for col in df.columns:
+            if pd.api.types.is_datetime64_any_dtype(df[col]):
+                # Standardize all datetimes to timezone-naive datetime64[ns]
+                df[col] = pd.to_datetime(df[col], errors='coerce').dt.tz_localize(None)
+            elif df[col].dtype == 'object':
+                # CRITICAL: Force all other object columns to strings. 
+                # This prevents Arrow from seeing mixed Timestamp/String/Int objects.
+                # We use .astype(str) which converts everything (including NaNs) to strings.
+                df[col] = df[col].astype(str)
+                # Then replace string representations of nulls back to None 
+                # (Arrow handles None in string columns correctly as nulls)
+                df[col] = df[col].replace(['nan', 'None', 'NaT', '<NA>'], None)
         return df
     except Exception as e:
         st.error(f"Error al cargar el archivo: {e}")
@@ -110,7 +131,7 @@ if df is not None:
             fig_hist = px.histogram(df, x=selected_num_col, 
                                    marginal="box" if show_box else None, 
                                    title=f"Distribución de {selected_num_col}")
-            st.plotly_chart(fig_hist, use_container_width=True)
+            st.plotly_chart(fig_hist)
 
     with tab2:
         st.header("Análisis Cualitativo")
@@ -127,6 +148,9 @@ if df is not None:
         st.dataframe(df.head())
 
         st.subheader("Tipos de Datos y Valores No Nulos")
+        # Diagnostic display of dtypes to identify serialization issues
+        st.write("Dtypes del Dataset:", df.dtypes.to_frame(name='Dtype'))
+        
         buffer = io.StringIO()
         df.info(buf=buffer)
         st.text(buffer.getvalue())
@@ -147,7 +171,7 @@ if df is not None:
                 fig_cat = px.bar(cat_counts, x=selected_cat_col, y='Cantidad', 
                                  title=f"Frecuencia de {selected_cat_col}",
                                  color=selected_cat_col)
-                st.plotly_chart(fig_cat, use_container_width=True)
+                st.plotly_chart(fig_cat)
 
     with tab3:
         st.header("Gráficos Interactivos")
@@ -183,7 +207,7 @@ if df is not None:
                                      color=color_by if color_by != 'Ninguno' else None,
                                      hover_data=df.columns,
                                      title=f"Relación entre {x_axis} y {y_axis}")
-            st.plotly_chart(fig_dynamic, use_container_width=True)
+            st.plotly_chart(fig_dynamic)
         
         # Specific predefined but interactive charts
         st.subheader("Análisis de Series Temporales")
@@ -202,7 +226,7 @@ if df is not None:
             fig_time = px.line(df_time, x=sel_date, y=sel_val, 
                                color=color_time if color_time != 'Ninguno' else None,
                                title=f"Evolución de {sel_val} en el tiempo")
-            st.plotly_chart(fig_time, use_container_width=True)
+            st.plotly_chart(fig_time)
         else:
             st.info("No se encontraron columnas de fecha para análisis temporal.")
 
@@ -217,7 +241,7 @@ if df is not None:
             fig_box = px.box(filtered_df, x=cat_box, y=num_box, color=cat_box,
                              points="all" if show_points else "outliers",
                              title=f"Distribución de {num_box} por {cat_box}")
-            st.plotly_chart(fig_box, use_container_width=True)
+            st.plotly_chart(fig_box)
 
     with tab4:
         st.header("Asistente AI - Chat con tus Datos")
