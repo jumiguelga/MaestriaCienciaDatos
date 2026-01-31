@@ -59,7 +59,8 @@ elif use_example:
         "a_FundamentosCienciaDatos/datasets/energia_renovable.csv",
         "a_FundamentosCienciaDatos/datasets/agro_colombia.csv",
         "a_FundamentosCienciaDatos/datasets/monitoreo_ambiental.csv",
-        "a_FundamentosCienciaDatos/Taller01/monitoreo_ambiental.csv"
+        "a_FundamentosCienciaDatos/Taller01/monitoreo_ambiental.csv",
+        "monitoreo_ambiental.csv"
     ]
     for path in example_datasets:
         try:
