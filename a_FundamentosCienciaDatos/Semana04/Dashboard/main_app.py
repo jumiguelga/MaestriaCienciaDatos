@@ -16,6 +16,10 @@ Carga tu archivo para comenzar a explorar las estadísticas, la calidad de los d
 
 # Sidebar for file upload
 st.sidebar.header("Configuración")
+
+# Option to use example data
+use_example = st.sidebar.checkbox("Usar datos de ejemplo si no hay archivo", value=True)
+
 uploaded_file = st.sidebar.file_uploader("Cargar archivo CSV", type=["csv"])
 
 def load_data(file):
@@ -35,34 +39,42 @@ def load_data(file):
         st.error(f"Error al cargar el archivo: {e}")
         return None
 
-# Attempt to load example data
-example_datasets = [
-    "a_FundamentosCienciaDatos/datasets/energia_renovable.csv",
-    "a_FundamentosCienciaDatos/datasets/agro_colombia.csv",
-    "a_FundamentosCienciaDatos/datasets/monitoreo_ambiental.csv",
-    "a_FundamentosCienciaDatos/Taller01/monitoreo_ambiental.csv"
-]
-
+# Attempt to load data
 df = None
 
 if uploaded_file is not None:
     df = load_data(uploaded_file)
     if df is not None:
-        st.success("Archivo cargado exitosamente.")
-else:
-    st.info("Carga un archivo CSV para comenzar el análisis.")
-    
+        st.sidebar.success("Archivo cargado exitosamente.")
+elif use_example:
     # Try to find any available dataset for demonstration if no file is uploaded
+    example_datasets = [
+        "a_FundamentosCienciaDatos/datasets/energia_renovable.csv",
+        "a_FundamentosCienciaDatos/datasets/agro_colombia.csv",
+        "a_FundamentosCienciaDatos/datasets/monitoreo_ambiental.csv",
+        "a_FundamentosCienciaDatos/Taller01/monitoreo_ambiental.csv"
+    ]
     for path in example_datasets:
         try:
             df = load_data(path)
             if df is not None:
-                st.write(f"Usando datos de ejemplo: `{path.split('/')[-1]}`")
+                st.sidebar.info(f"Usando datos de ejemplo: `{path.split('/')[-1]}`")
                 break
         except:
             continue
 
 if df is not None:
+    # Quantity of rows selector
+    st.sidebar.subheader("Selección de Filas")
+    max_rows = len(df)
+    row_count = st.sidebar.slider("Cantidad de filas a analizar", 
+                                  min_value=min(10, max_rows), 
+                                  max_value=max_rows, 
+                                  value=max_rows)
+    
+    # Filter by selected row count (taking the first N rows)
+    df = df.head(row_count)
+    
     # Navigation
     tab1, tab2, tab3 = st.tabs(["Análisis Cuantitativo", "Análisis Cualitativo", "Gráficos Interactivos"])
 
@@ -84,7 +96,13 @@ if df is not None:
         if not numeric_df.empty:
             st.subheader("Distribución de Variables Numéricas")
             selected_num_col = st.selectbox("Selecciona una variable para ver su distribución", numeric_df.columns)
-            fig_hist = px.histogram(df, x=selected_num_col, marginal="box", title=f"Distribución de {selected_num_col}")
+            
+            # Button to show/hide box plot overlay
+            show_box = st.checkbox("Superponer gráfico de caja (Box Plot)", value=True)
+            
+            fig_hist = px.histogram(df, x=selected_num_col, 
+                                   marginal="box" if show_box else None, 
+                                   title=f"Distribución de {selected_num_col}")
             st.plotly_chart(fig_hist, use_container_width=True)
 
     with tab2:
@@ -186,8 +204,14 @@ if df is not None:
         if not categorical_cols.empty and not numeric_df.empty:
             cat_box = st.selectbox("Categoría para el eje X", categorical_cols, key='box_cat')
             num_box = st.selectbox("Variable numérica para el eje Y", numeric_cols, key='box_num')
+            
+            show_points = st.checkbox("Mostrar todos los puntos", value=False)
+            
             fig_box = px.box(filtered_df, x=cat_box, y=num_box, color=cat_box,
+                             points="all" if show_points else "outliers",
                              title=f"Distribución de {num_box} por {cat_box}")
             st.plotly_chart(fig_box, use_container_width=True)
 else:
-    st.write("Por favor, sube un archivo CSV para visualizar el análisis.")
+    st.info("Carga un archivo CSV para comenzar el análisis.")
+    if st.sidebar.button("Limpiar/Reiniciar App"):
+        st.rerun()
