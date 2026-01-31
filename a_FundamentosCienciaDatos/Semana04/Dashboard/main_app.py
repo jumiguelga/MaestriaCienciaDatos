@@ -4,6 +4,8 @@ import plotly.express as px
 import seaborn as sns
 import matplotlib.pyplot as plt
 import io
+from pandasai import SmartDataframe
+from pandasai.llm import Groq
 
 st.set_page_config(page_title="EDA Dinámico", layout="wide")
 
@@ -16,6 +18,11 @@ Carga tu archivo para comenzar a explorar las estadísticas, la calidad de los d
 
 # Sidebar for file upload
 st.sidebar.header("Configuración")
+
+# Groq API Key
+groq_api_key = st.sidebar.text_input("Groq API Key", type="password", help="Ingresa tu API Key de Groq para habilitar el Asistente AI")
+if not groq_api_key:
+    st.sidebar.warning("Ingresa una Groq API Key para usar el chat con datos.")
 
 # Option to use example data
 use_example = st.sidebar.checkbox("Usar datos de ejemplo si no hay archivo", value=True)
@@ -76,7 +83,7 @@ if df is not None:
     df = df.head(row_count)
     
     # Navigation
-    tab1, tab2, tab3 = st.tabs(["Análisis Cuantitativo", "Análisis Cualitativo", "Gráficos Interactivos"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Análisis Cuantitativo", "Análisis Cualitativo", "Gráficos Interactivos", "Asistente AI"])
 
     with tab1:
         st.header("Análisis Cuantitativo")
@@ -211,7 +218,42 @@ if df is not None:
                              points="all" if show_points else "outliers",
                              title=f"Distribución de {num_box} por {cat_box}")
             st.plotly_chart(fig_box, use_container_width=True)
+
+    with tab4:
+        st.header("Asistente AI - Chat con tus Datos")
+        
+        if not groq_api_key:
+            st.info("Por favor, ingresa tu Groq API Key en la barra lateral para habilitar el asistente.")
+        else:
+            try:
+                # Initialize LLM
+                llm = Groq(api_token=groq_api_key, model="llama3-70b-8192")
+                smart_df = SmartDataframe(df, config={"llm": llm})
+
+                if "messages" not in st.session_state:
+                    st.session_state.messages = []
+
+                # Display chat history
+                for message in st.session_state.messages:
+                    with st.chat_message(message["role"]):
+                        st.markdown(message["content"])
+
+                # Chat input
+                if prompt := st.chat_input("¿Qué quieres saber sobre tus datos?"):
+                    st.session_state.messages.append({"role": "user", "content": prompt})
+                    with st.chat_message("user"):
+                        st.markdown(prompt)
+
+                    with st.chat_message("assistant"):
+                        with st.spinner("Analizando..."):
+                            response = smart_df.chat(prompt)
+                            st.markdown(response)
+                            st.session_state.messages.append({"role": "assistant", "content": response})
+            except Exception as e:
+                st.error(f"Error al inicializar el asistente AI: {e}")
 else:
     st.info("Carga un archivo CSV para comenzar el análisis.")
     if st.sidebar.button("Limpiar/Reiniciar App"):
+        if "messages" in st.session_state:
+            del st.session_state.messages
         st.rerun()
