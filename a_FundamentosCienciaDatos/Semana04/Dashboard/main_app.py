@@ -5,13 +5,13 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import io
 
-st.set_page_config(page_title="EDA - Energía Renovable", layout="wide")
+st.set_page_config(page_title="EDA Dinámico", layout="wide")
 
-st.title("Exploratory Data Analysis (EDA) - Proyectos de Energía Renovable")
+st.title("Exploratory Data Analysis (EDA) Dinámico")
 
 st.markdown("""
-Esta aplicación permite realizar un análisis exploratorio de datos (EDA) sobre proyectos de energía renovable.
-Puedes subir tu propio archivo CSV o usar el archivo de ejemplo proporcionado.
+Esta aplicación permite realizar un análisis exploratorio de datos (EDA) sobre cualquier conjunto de datos en formato CSV.
+Carga tu archivo para comenzar a explorar las estadísticas, la calidad de los datos y generar gráficos interactivos.
 """)
 
 # Sidebar for file upload
@@ -21,20 +21,27 @@ uploaded_file = st.sidebar.file_uploader("Cargar archivo CSV", type=["csv"])
 def load_data(file):
     try:
         df = pd.read_csv(file)
-        # Convert Fecha_Entrada_Operacion to datetime
-        if 'Fecha_Entrada_Operacion' in df.columns:
-            df['Fecha_Entrada_Operacion'] = pd.to_datetime(df['Fecha_Entrada_Operacion'])
+        # Dynamic date conversion: try to convert columns that look like dates
+        for col in df.columns:
+            if df[col].dtype == 'object':
+                try:
+                    # Check if it's likely a date string (basic check)
+                    if df[col].str.contains('-').any() or df[col].str.contains('/').any():
+                        df[col] = pd.to_datetime(df[col], errors='ignore')
+                except:
+                    pass
         return df
     except Exception as e:
         st.error(f"Error al cargar el archivo: {e}")
         return None
 
-# Attempt to load the example data if no file is uploaded
-# The absolute path in the issue was /Users/juangomez/Documents/Study/EAFIT/a.FundamentosCienciaDatos/datasets/energia_renovable.csv
-# We'll try to look for it in the project structure if it was there, or just wait for upload.
-# Based on project structure provided, it doesn't seem to be inside /Users/juangomez/Projects/MaestriaCienciaDatos
-# except if it was recently added.
-example_path = "a_FundamentosCienciaDatos/datasets/energia_renovable.csv"
+# Attempt to load example data
+example_datasets = [
+    "a_FundamentosCienciaDatos/datasets/energia_renovable.csv",
+    "a_FundamentosCienciaDatos/datasets/agro_colombia.csv",
+    "a_FundamentosCienciaDatos/datasets/monitoreo_ambiental.csv",
+    "a_FundamentosCienciaDatos/Taller01/monitoreo_ambiental.csv"
+]
 
 df = None
 
@@ -43,13 +50,17 @@ if uploaded_file is not None:
     if df is not None:
         st.success("Archivo cargado exitosamente.")
 else:
-    st.info("Por favor carga un archivo CSV (como 'energia_renovable.csv') para comenzar.")
-    # For demonstration purposes, if the file existed in a known relative path:
-    # try:
-    #     df = load_data(example_path)
-    #     st.write("Usando datos de ejemplo.")
-    # except:
-    #     pass
+    st.info("Carga un archivo CSV para comenzar el análisis.")
+    
+    # Try to find any available dataset for demonstration if no file is uploaded
+    for path in example_datasets:
+        try:
+            df = load_data(path)
+            if df is not None:
+                st.write(f"Usando datos de ejemplo: `{path.split('/')[-1]}`")
+                break
+        except:
+            continue
 
 if df is not None:
     # Navigation
@@ -119,14 +130,16 @@ if df is not None:
         st.sidebar.subheader("Filtros de Datos")
         filtered_df = df.copy()
         
-        # Dynamic Filters based on data
-        if 'Tecnologia' in df.columns:
-            tech_filter = st.sidebar.multiselect("Filtrar por Tecnología", options=df['Tecnologia'].unique(), default=df['Tecnologia'].unique())
-            filtered_df = filtered_df[filtered_df['Tecnologia'].isin(tech_filter)]
-            
-        if 'Estado_Actual' in df.columns:
-            status_filter = st.sidebar.multiselect("Filtrar por Estado", options=df['Estado_Actual'].unique(), default=df['Estado_Actual'].unique())
-            filtered_df = filtered_df[filtered_df['Estado_Actual'].isin(status_filter)]
+        # Dynamic Filters based on categorical data
+        categorical_cols_for_filter = df.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
+        
+        # We only show filters for columns with a reasonable number of unique values (e.g. < 20)
+        # to avoid cluttering the sidebar.
+        for col in categorical_cols_for_filter:
+            unique_vals = df[col].unique()
+            if 1 < len(unique_vals) <= 25:
+                filter_vals = st.sidebar.multiselect(f"Filtrar por {col}", options=unique_vals, default=unique_vals)
+                filtered_df = filtered_df[filtered_df[col].isin(filter_vals)]
 
         # Dynamic Scatter Plot
         st.subheader("Explorador de Relaciones (Scatter Plot)")
@@ -154,8 +167,15 @@ if df is not None:
             sel_date = st.selectbox("Selecciona columna de fecha", date_cols)
             sel_val = st.selectbox("Selecciona valor a graficar", numeric_cols)
             
+            # Determine grouping if there's a good categorical column
+            color_time = 'Ninguno'
+            potential_cats = [c for c in categorical_cols_for_filter if 1 < len(df[c].unique()) <= 10]
+            if potential_cats:
+                 color_time = st.selectbox("Agrupar por (Color)", ['Ninguno'] + potential_cats)
+
             df_time = filtered_df.sort_values(sel_date)
-            fig_time = px.line(df_time, x=sel_date, y=sel_val, color='Tecnologia' if 'Tecnologia' in df.columns else None,
+            fig_time = px.line(df_time, x=sel_date, y=sel_val, 
+                               color=color_time if color_time != 'Ninguno' else None,
                                title=f"Evolución de {sel_val} en el tiempo")
             st.plotly_chart(fig_time, use_container_width=True)
         else:
