@@ -6,3 +6,10 @@ seaborn
 jupyter
 ipython
 scipy
+streamlit
+altair
+vl-convert-python
+Pillow
+reportlab
+rapidfuzz
+requests

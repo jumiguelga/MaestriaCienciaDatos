@@ -1,3 +1,5 @@
+# dictionaries.py
+
 mapping_bodegas = {
     # Norte
     'norte': 'norte',
@@ -72,7 +74,6 @@ mapping_categorias = {
     '???': 'otros',
 }
 
-
 mapping_ciudades_destino = {
     # Medellín
     'Medellín': 'medellin',
@@ -104,12 +105,12 @@ mapping_ciudades_destino = {
     'bucaramanga': 'bucaramanga',
     'BUCARAMANGA': 'bucaramanga',
 
-    # Canal online
-    'Ventas_Web': 'online',
-    'ventas_web': 'online',
-    'VENTAS_WEB': 'online',
-    'online': 'online',
-    'ONLINE': 'online',
+    # Canal online (se mapean a 'desconocido')
+    'Ventas_Web': 'desconocido',
+    'ventas_web': 'desconocido',
+    'VENTAS_WEB': 'desconocido',
+    'online': 'desconocido',
+    'ONLINE': 'desconocido',
 }
 
 mapping_canal_venta = {
@@ -162,4 +163,17 @@ mapping_estado_envio = {
     'En camino': 'en_camino',
     'en camino': 'en_camino',
     'encamino': 'en_camino',
+}
+
+map_ticket_soporte = {
+    "Sí": "Si",
+    "SI": "Si",
+    "si": "Si",
+    "1": "Si",
+    1: "Si",
+    "No": "No",
+    "NO": "No",
+    "no": "No",
+    "0": "No",
+    0: "No",
 }
