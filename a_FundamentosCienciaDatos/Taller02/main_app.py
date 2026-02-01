@@ -27,19 +27,34 @@ st.set_page_config(page_title="Challenge 02 – Data Cleaning & EDA", layout="wi
 st.title("Dashboard de Limpieza y EDA")
 
 # -------------------------
-# Carga de datos (placeholder: aquí ajustas a tu lógica real)
+# Carga de datos por el usuario
 # -------------------------
+
+st.sidebar.header("1. Carga de archivos CSV")
+
+inv_file = st.sidebar.file_uploader("Inventario (CSV)", type=["csv"], key="inv")
+tx_file = st.sidebar.file_uploader("Transacciones (CSV)", type=["csv"], key="tx")
+fb_file = st.sidebar.file_uploader("Feedback (CSV)", type=["csv"], key="fb")
+
 @st.cache_data
-def load_data():
-    # Sustituir por lectura real (CSV, etc.)
-    inv = pd.DataFrame()
-    tx = pd.DataFrame()
-    fb = pd.DataFrame()
-    return inv, tx, fb
+def load_csv(file) -> pd.DataFrame:
+    return pd.read_csv(file)
 
-inventario_raw, transacciones_raw, feedback_raw = load_data()
+inventario_raw = load_csv(inv_file) if inv_file is not None else pd.DataFrame()
+transacciones_raw = load_csv(tx_file) if tx_file is not None else pd.DataFrame()
+feedback_raw = load_csv(fb_file) if fb_file is not None else pd.DataFrame()
 
-st.sidebar.header("Opciones de limpieza opcional")
+if inventario_raw.empty or transacciones_raw.empty or feedback_raw.empty:
+    st.warning("Por favor carga los tres archivos: inventario, transacciones y feedback para iniciar el análisis.")
+    st.stop()
+
+st.success("Archivos cargados correctamente. Continúa con las opciones de limpieza y análisis.")
+
+# -------------------------
+# Opciones de limpieza opcional
+# -------------------------
+
+st.sidebar.header("2. Opciones de limpieza opcional")
 
 # Flags transacciones
 opt_imputar_costo_envio = st.sidebar.checkbox(
@@ -75,11 +90,13 @@ inv_clean, inv_report = sanitize_inventario(inventario_raw)
 tx_clean, tx_report = sanitize_transacciones(transacciones_raw)
 fb_clean = limpiar_feedback_basico(feedback_raw)
 
-st.subheader("Inventario – resumen de limpieza")
-st.dataframe(inv_report)
-
-st.subheader("Transacciones – resumen de limpieza")
-st.dataframe(tx_report)
+col1, col2 = st.columns(2)
+with col1:
+    st.subheader("Inventario – resumen de limpieza")
+    st.dataframe(inv_report)
+with col2:
+    st.subheader("Transacciones – resumen de limpieza")
+    st.dataframe(tx_report)
 
 # -------------------------
 # Limpieza opcional
@@ -127,35 +144,4 @@ flags = [
     "flag_sku_fantasma",
 ]
 
-health = compute_health_metrics(
-    raw_df=transacciones_raw,
-    clean_df=tx_clean,
-    final_df=tx_final,
-    flags=flags,
-)
-
-st.json(health)
-
-# -------------------------
-# EDA / Visualizaciones
-# -------------------------
-
-st.header("4. Análisis exploratorio")
-
-tab_inv, tab_tx, tab_fb, tab_join = st.tabs(
-    ["Inventario", "Transacciones", "Feedback", "JOIN"]
-)
-
-with tab_inv:
-    show_inventory_analysis(inv_clean)
-
-with tab_tx:
-    show_transactions_analysis(tx_final)
-
-with tab_fb:
-    show_feedback_analysis(fb_final)
-
-with tab_join:
-    # Aquí deberías construir el JOIN real (similar a Act2.py)
-    joined = pd.DataFrame()
-    show_joined_analysis(joined)
+health = com
