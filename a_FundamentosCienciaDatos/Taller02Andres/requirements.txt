@@ -1,0 +1,11 @@
+streamlit
+pandas
+numpy
+python-dateutil
+rapidfuzz
+scikit-learn
+groq
+vl-convert-python
+altair
+reportlab
+pillow
