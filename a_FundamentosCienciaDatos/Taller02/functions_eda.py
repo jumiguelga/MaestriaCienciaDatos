@@ -3,7 +3,7 @@ from datetime import datetime
 import dictionaries as dicts
 from sklearn.impute import KNNImputer
 import numpy as np
-
+import re
 
 # -------------------------------------------------------------------
 # Limpieza estándar: INVENTARIO
@@ -309,5 +309,89 @@ def limpiar_feedback_basico(feedback: pd.DataFrame) -> pd.DataFrame:
             .map(dicts.map_ticket_soporte)
             .fillna("Desconocido")
         )
+
+    return df
+
+def parse_lead_time_to_days(value):
+    """Convierte '25', '25-30 dias', '25-30 días' -> número (promedio del rango).
+    Si no puede parsear, devuelve NaN.
+    """
+    if pd.isna(value):
+        return np.nan
+    s = str(value).strip().lower()
+    nums = re.findall(r"\d+", s)
+    if not nums:
+        return np.nan
+    nums = list(map(int, nums))
+    if len(nums) == 1:
+        return float(nums[0])
+    return float((min(nums) + max(nums)) / 2.0)
+
+
+def enriquecer_con_estado_envio_reglas(
+    transacciones: pd.DataFrame,
+    inventario: pd.DataFrame,
+    hoy: str = "2026-02-01",
+    margen_dias: int = 2,
+) -> pd.DataFrame:
+    """Enriquece transacciones con Lead_Time_Dias numérico y Estado_Envio_Reglas.
+
+    Usa:
+    - SKU_ID para unir inventario.
+    - Lead_Time_Dias (texto o numérico) en inventario.
+    - Fecha_Venta y Estado_Envio en transacciones.
+
+    Retorna un nuevo DataFrame con:
+    - Lead_Time_Dias_num
+    - dias_desde_venta
+    - Estado_Envio_Reglas
+    """
+    df = transacciones.copy()
+
+    # Validaciones mínimas
+    if "SKU_ID" not in df.columns:
+        raise ValueError("Se requiere columna 'SKU_ID' en transacciones")
+    if "SKU_ID" not in inventario.columns:
+        raise ValueError("Se requiere columna 'SKU_ID' en inventario")
+    if "Lead_Time_Dias" not in inventario.columns:
+        raise ValueError("Se requiere columna 'Lead_Time_Dias' en inventario")
+
+    # 1) Normalizar Lead_Time_Dias en inventario
+    inv = inventario.copy()
+    inv["Lead_Time_Dias_num"] = inv["Lead_Time_Dias"].apply(parse_lead_time_to_days)
+
+    # 2) Unir a transacciones
+    df = df.merge(
+        inv[["SKU_ID", "Lead_Time_Dias_num"]],
+        on="SKU_ID",
+        how="left",
+    )
+
+    # 3) Calcular días desde la venta
+    df["Fecha_Venta"] = pd.to_datetime(df["Fecha_Venta"], errors="coerce")
+    hoy_dt = pd.to_datetime(hoy)
+    df["dias_desde_venta"] = (hoy_dt - df["Fecha_Venta"]).dt.days
+
+    # 4) Clasificar estado según reglas
+    def clasificar_estado(row):
+        estado = row.get("Estado_Envio")
+        lead_time = row.get("Lead_Time_Dias_num")
+        dias = row.get("dias_desde_venta")
+
+        # Si ya hay estado, lo mantenemos
+        if pd.notna(estado):
+            return estado
+
+        # Si falta lead_time o fecha, no podemos inferir
+        if pd.isna(lead_time) or pd.isna(dias):
+            return "estado_desconocido"
+
+        # Regla simple usando lead_time + margen
+        if dias <= lead_time + margen_dias:
+            return "aun_en_tiempo_o_en_camino"
+
+        return "posible_retraso"
+
+    df["Estado_Envio_Reglas"] = df.apply(clasificar_estado, axis=1)
 
     return df
