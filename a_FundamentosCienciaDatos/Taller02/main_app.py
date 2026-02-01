@@ -1,5 +1,3 @@
-# main_app.py
-
 import streamlit as st
 import pandas as pd
 
@@ -7,7 +5,7 @@ from functions_eda import (
     sanitize_inventario,
     sanitize_transacciones,
     imputar_costo_envio_knn,
-    enriquecer_con_estado_envio_reglas,
+    enriquecer_con_estado_envio_reglas,  # si luego la quieres usar
     excluir_ventas_cantidad_negativa,
     corregir_o_excluir_ventas_futuras,
     filtrar_skus_fantasma,
@@ -21,6 +19,7 @@ from data_analysis import (
     show_feedback_analysis,
     show_joined_analysis,
 )
+
 
 st.set_page_config(page_title="Challenge 02 – Data Cleaning & EDA", layout="wide")
 
@@ -36,9 +35,11 @@ inv_file = st.sidebar.file_uploader("Inventario (CSV)", type=["csv"], key="inv")
 tx_file = st.sidebar.file_uploader("Transacciones (CSV)", type=["csv"], key="tx")
 fb_file = st.sidebar.file_uploader("Feedback (CSV)", type=["csv"], key="fb")
 
+
 @st.cache_data
 def load_csv(file) -> pd.DataFrame:
     return pd.read_csv(file)
+
 
 inventario_raw = load_csv(inv_file) if inv_file is not None else pd.DataFrame()
 transacciones_raw = load_csv(tx_file) if tx_file is not None else pd.DataFrame()
@@ -56,7 +57,6 @@ st.success("Archivos cargados correctamente. Continúa con las opciones de limpi
 
 st.sidebar.header("2. Opciones de limpieza opcional")
 
-# Flags transacciones
 opt_imputar_costo_envio = st.sidebar.checkbox(
     "Imputar costo de envío (KNN)", value=False
 )
@@ -75,7 +75,6 @@ opt_incluir_skus_fantasma = st.sidebar.checkbox(
     "Incluir SKUs que no están en inventario", value=True
 )
 
-# Feedback
 opt_excluir_feedback_dup = st.sidebar.checkbox(
     "Excluir Feedback_ID duplicados", value=False
 )
@@ -144,4 +143,34 @@ flags = [
     "flag_sku_fantasma",
 ]
 
-health = com
+health = compute_health_metrics(
+    raw_df=transacciones_raw,
+    clean_df=tx_clean,
+    final_df=tx_final,
+    flags=flags,
+)
+
+st.json(health)
+
+# -------------------------
+# EDA / Visualizaciones
+# -------------------------
+
+st.header("4. Análisis exploratorio")
+
+tab_inv, tab_tx, tab_fb, tab_join = st.tabs(
+    ["Inventario", "Transacciones", "Feedback", "JOIN"]
+)
+
+with tab_inv:
+    show_inventory_analysis(inv_clean)
+
+with tab_tx:
+    show_transactions_analysis(tx_final)
+
+with tab_fb:
+    show_feedback_analysis(fb_final)
+
+with tab_join:
+    joined = pd.DataFrame()  # TODO: armar JOIN más adelante
+    show_joined_analysis(joined)
