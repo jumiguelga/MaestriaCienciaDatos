@@ -1,13 +1,10 @@
-# functions_eda.py (fragmentos clave)
-
 import pandas as pd
 from datetime import datetime
-import extras.dictionaries as dicts
+import dictionaries as dicts
 from sklearn.impute import KNNImputer
 import re
 import numpy as np
 
-# ...
 
 def imputar_costo_envio_knn(transacciones, n_neighbors=5):
     """
@@ -39,10 +36,6 @@ def imputar_costo_envio_knn(transacciones, n_neighbors=5):
 
     return df
 
-
-# ---------------------------
-# Funciones opcionales transacciones
-# ---------------------------
 
 def excluir_ventas_cantidad_negativa(transacciones: pd.DataFrame) -> pd.DataFrame:
     """
@@ -102,10 +95,6 @@ def filtrar_skus_fantasma(
         return df[~df["flag_sku_fantasma"]].copy()
 
 
-# ---------------------------
-# Feedback: duplicados
-# ---------------------------
-
 def excluir_feedback_duplicado(feedback: pd.DataFrame) -> pd.DataFrame:
     """
     Excluye filas con Feedback_ID duplicado, conservando la primera ocurrencia.
@@ -115,11 +104,13 @@ def excluir_feedback_duplicado(feedback: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# ---------------------------
-# Feedback básico (ajustado)
-# ---------------------------
-
 def limpiar_feedback_basico(feedback: pd.DataFrame) -> pd.DataFrame:
+    """
+    Limpieza básica del dataset de feedback:
+    - Comentario_Texto y Recomienda_Marca: nulos -> 'No_responde'
+    - Agrupa Satisfaccion_NPS en categorías
+    - Normaliza Ticket_Soporte_Abierto con diccionario
+    """
     df = feedback.copy()
 
     if "Comentario_Texto" in df.columns:
