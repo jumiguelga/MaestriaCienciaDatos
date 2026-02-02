@@ -339,9 +339,9 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         else:
             st.warning("No se encontró información de NPS procesada.")
 
-        if 'Edad' in fb_clean.columns:
+        if 'Edad_Cliente' in fb_clean.columns:
             st.subheader("Análisis de Outliers en Edad")
-            age_outliers = feda.outlier_flag_iqr(fb_clean, 'Edad')
+            age_outliers = feda.outlier_flag_iqr(fb_clean, 'Edad_Cliente')
             outlier_df = fb_clean[age_outliers]
             
             if not outlier_df.empty:
@@ -349,10 +349,10 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
                 col_age1, col_age2 = st.columns(2)
                 with col_age1:
                     st.write("Muestra de Outliers:")
-                    st.dataframe(outlier_df[['Feedback_ID', 'Edad', 'Satisfaccion_NPS']].head(10))
+                    st.dataframe(outlier_df[['Feedback_ID', 'Edad_Cliente', 'Satisfaccion_NPS']].head(10))
                 with col_age2:
                     fig, ax = plt.subplots(figsize=(5, 3))
-                    sns.boxplot(x=fb_clean['Edad'], ax=ax, color='orange')
+                    sns.boxplot(x=fb_clean['Edad_Cliente'], ax=ax, color='orange')
                     ax.set_title("Boxplot de Edad (Feedback)")
                     st.pyplot(fig)
             else:
