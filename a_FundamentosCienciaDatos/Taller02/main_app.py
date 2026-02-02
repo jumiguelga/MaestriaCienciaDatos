@@ -159,31 +159,94 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
     tab1, tab2, tab3, tab4 = st.tabs(["EDA General", "Salud Inventario", "Salud Transacciones", "Salud NPS"])
 
     with tab1:
-        st.header("Análisis Exploratorio de Datos (EDA)")
+        st.header("Análisis Exploratorio de Datos (EDA) por Dataset")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Estadísticas Cuantitativas")
-            st.write(joined_df.describe())
-            
-        with col2:
-            st.subheader("Estadísticas Cualitativas")
-            st.write(joined_df.select_dtypes(include=['object', 'string']).describe())
+        # --- EDA INVENTARIO ---
+        st.subheader("1. EDA: Inventario")
+        col_inv1, col_inv2 = st.columns(2)
+        with col_inv1:
+            st.write("**Estadísticas Cuantitativas**")
+            st.write(inv_clean.describe())
+        with col_inv2:
+            st.write("**Estadísticas Cualitativas**")
+            st.write(inv_clean.select_dtypes(include=['object', 'string']).describe())
+        
+        st.write("**Visualizaciones Inventario**")
+        v_inv_col1, v_inv_col2 = st.columns(2)
+        with v_inv_col1:
+            num_cols_inv = inv_clean.select_dtypes(include=[np.number]).columns
+            if not num_cols_inv.empty:
+                st.write("*Boxplots Variables Numéricas*")
+                fig, ax = plt.subplots(figsize=(5, 3))
+                sns.boxplot(data=inv_clean[num_cols_inv], ax=ax)
+                plt.xticks(rotation=45)
+                st.pyplot(fig)
+        with v_inv_col2:
+            cat_cols_inv = inv_clean.select_dtypes(include=['object', 'string']).columns
+            if 'Categoria' in cat_cols_inv:
+                st.write("*Distribución por Categoría*")
+                fig, ax = plt.subplots(figsize=(5, 3))
+                sns.countplot(y=inv_clean['Categoria'], ax=ax)
+                st.pyplot(fig)
 
-        st.subheader("Visualizaciones")
-        viz_col1, viz_col2 = st.columns(2)
-        
-        with viz_col1:
-            st.write("**Distribución de Ingresos**")
-            fig, ax = plt.subplots(figsize=(5, 3))
-            sns.histplot(joined_df['Ingreso'], kde=True, ax=ax)
-            st.pyplot(fig)
-            
-        with viz_col2:
-            st.write("**Outliers en Costo Unitario (Inventario)**")
-            fig, ax = plt.subplots(figsize=(5, 3))
-            sns.boxplot(x=inv_clean['Costo_Unitario_USD'], ax=ax)
-            st.pyplot(fig)
+        st.divider()
+
+        # --- EDA TRANSACCIONES ---
+        st.subheader("2. EDA: Transacciones")
+        col_tx1, col_tx2 = st.columns(2)
+        with col_tx1:
+            st.write("**Estadísticas Cuantitativas**")
+            st.write(tx_clean.describe())
+        with col_tx2:
+            st.write("**Estadísticas Cualitativas**")
+            st.write(tx_clean.select_dtypes(include=['object', 'string']).describe())
+
+        st.write("**Visualizaciones Transacciones**")
+        v_tx_col1, v_tx_col2 = st.columns(2)
+        with v_tx_col1:
+            num_cols_tx = tx_clean.select_dtypes(include=[np.number]).columns
+            if not num_cols_tx.empty:
+                st.write("*Boxplots Variables Numéricas*")
+                fig, ax = plt.subplots(figsize=(5, 3))
+                sns.boxplot(data=tx_clean[num_cols_tx], ax=ax)
+                plt.xticks(rotation=45)
+                st.pyplot(fig)
+        with v_tx_col2:
+            if 'Canal_Venta' in tx_clean.columns:
+                st.write("*Distribución por Canal de Venta*")
+                fig, ax = plt.subplots(figsize=(5, 3))
+                sns.countplot(x=tx_clean['Canal_Venta'], ax=ax)
+                st.pyplot(fig)
+
+        st.divider()
+
+        # --- EDA FEEDBACK ---
+        st.subheader("3. EDA: Feedback")
+        col_fb1, col_fb2 = st.columns(2)
+        with col_fb1:
+            st.write("**Estadísticas Cuantitativas**")
+            st.write(fb_clean.describe())
+        with col_fb2:
+            st.write("**Estadísticas Cualitativas**")
+            st.write(fb_clean.select_dtypes(include=['object', 'string']).describe())
+
+        st.write("**Visualizaciones Feedback**")
+        v_fb_col1, v_fb_col2 = st.columns(2)
+        with v_fb_col1:
+            num_cols_fb = fb_clean.select_dtypes(include=[np.number]).columns
+            if not num_cols_fb.empty:
+                st.write("*Boxplots Variables Numéricas*")
+                fig, ax = plt.subplots(figsize=(5, 3))
+                sns.boxplot(data=fb_clean[num_cols_fb], ax=ax)
+                plt.xticks(rotation=45)
+                st.pyplot(fig)
+        with v_fb_col2:
+            if 'Satisfaccion_NPS_Grupo' in fb_clean.columns:
+                st.write("*Distribución Grupos NPS*")
+                fig, ax = plt.subplots(figsize=(5, 3))
+                sns.countplot(x=fb_clean['Satisfaccion_NPS_Grupo'], ax=ax)
+                plt.xticks(rotation=45)
+                st.pyplot(fig)
 
     with tab2:
         st.header("Análisis de Salud: Inventario")
