@@ -482,10 +482,15 @@ def build_join_dataset(
     """
     Construye el JOIN final: Transacciones ↔ Inventario ↔ Feedback
     Incluye flags de SKU fantasma y sin feedback.
+    IMPORTANTE: Asegura que Ultima_Revision y Bodega_Origen se unan correctamente.
     """
     # Preparar datos
     invj = inv_clean.copy()
     invj["SKU_ID"] = invj["SKU_ID"].astype("string").str.strip()
+    
+    # Convertir Ultima_Revision a datetime si existe
+    if "Ultima_Revision" in invj.columns:
+        invj["Ultima_Revision"] = pd.to_datetime(invj["Ultima_Revision"], errors="coerce")
     
     txj = tx_final.copy()
     txj["SKU_ID"] = txj["SKU_ID"].astype("string").str.strip()
@@ -496,7 +501,7 @@ def build_join_dataset(
     if "Transaccion_ID" in fbj.columns:
         fbj["Transaccion_ID"] = fbj["Transaccion_ID"].astype("string").str.strip()
     
-    # JOIN: Tx ↔ Inv
+    # JOIN: Tx ↔ Inv (asegurar que TODAS las columnas de inv se unan)
     join_tx_inv = txj.merge(
         invj, on="SKU_ID", how="left", suffixes=("", "_inv"), indicator="merge_tx_inv"
     )
