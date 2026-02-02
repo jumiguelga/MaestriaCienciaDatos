@@ -332,63 +332,113 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         c2.metric("Nulos Totales (Raw)", nulls)
         c3.metric("Filas Removidas/Filtradas", cleaned)
 
-        if 'Satisfaccion_NPS_Grupo' in fb_clean.columns:
-            st.subheader("Distribución de NPS")
-        
-            # Usamos columnas para centrar y reducir el tamaño visual del gráfico
-            ec1, ec2, ec3 = st.columns([1, 1, 1])
-            with ec2:
-                fig, ax = plt.subplots(figsize=(3, 3))  # Tamaño más pequeño
-                fb_clean['Satisfaccion_NPS_Grupo'].value_counts().plot(
-                    kind='pie',
-                    autopct='%1.1f%%',
-                    ax=ax,
-                    textprops={'fontsize': 7} # Texto más pequeño para que quepa
-                )
-                ax.set_ylabel('')
-                st.pyplot(fig)
-        
-            st.subheader("Detalle de Grupos NPS")
+        if 'Satisfaccion_NPS' in fb_clean.columns:
+            # --- NUEVA VISUALIZACIÓN NPS PROFESIONAL ---
+            st.markdown("---")
             
-            # Preparar datos para el gráfico de barras horizontales
-            nps_counts = fb_clean['Satisfaccion_NPS_Grupo'].value_counts()
+            # 1. Preparación de Datos
+            nps_scores = fb_clean['Satisfaccion_NPS'].value_counts().reindex(range(11), fill_value=0)
+            total_respuestas = len(fb_clean)
             
-            # Definir el orden deseado y los colores/iconos
-            nps_order = [
-                ("muy_insatisfecho", "😠 Muy insatisfecho", "red"),
-                ("neutro_o_ligeramente_satisfecho", "😐 Neutro o ligeramente insatisfecho", "skyblue"),
-                ("satisfecho", "🙂 Satisfecho", "yellow"),
-                ("muy_satisfecho", "😁 Muy satisfecho", "green")
-            ]
+            detractores = fb_clean[fb_clean['Satisfaccion_NPS'] <= 6]
+            pasivos = fb_clean[(fb_clean['Satisfaccion_NPS'] >= 7) & (fb_clean['Satisfaccion_NPS'] <= 8)]
+            promotores = fb_clean[fb_clean['Satisfaccion_NPS'] >= 9]
             
-            # Filtrar solo los que existen en los datos
-            labels = []
-            values = []
-            colors_list = []
+            count_det = len(detractores)
+            count_pas = len(pasivos)
+            count_pro = len(promotores)
             
-            for key, label, color in nps_order:
-                if key in nps_counts.index:
-                    labels.append(label)
-                    values.append(nps_counts[key])
-                    colors_list.append(color)
+            pct_det = (count_det / total_respuestas * 100) if total_respuestas > 0 else 0
+            pct_pas = (count_pas / total_respuestas * 100) if total_respuestas > 0 else 0
+            pct_pro = (count_pro / total_respuestas * 100) if total_respuestas > 0 else 0
             
-            # Crear gráfico con matplotlib
-            fig_nps, ax_nps = plt.subplots(figsize=(8, 4))
-            bars = ax_nps.barh(labels, values, color=colors_list, edgecolor='black')
-            ax_nps.set_xlabel('Cantidad de Respuestas')
-            ax_nps.set_title('Distribución de Grupos NPS')
+            nps_score = pct_pro - pct_det
             
-            # Invertir el eje Y para que "Muy insatisfecho" esté arriba si se desea, 
-            # pero el requerimiento dice: 1ro muy insatisfecho, 2do neutro... 
-            # En barh el primero de la lista suele ir abajo, así que invertimos.
-            ax_nps.invert_yaxis() 
+            # Colores corporativos
+            color_det = "#E91E63"
+            color_pas = "#FFC107"
+            color_pro = "#4CAF50"
             
-            # Añadir etiquetas de valor a las barras
-            for bar in bars:
-                width = bar.get_width()
-                ax_nps.text(width + 0.3, bar.get_y() + bar.get_height()/2, f'{int(width)}', va='center')
+            st.markdown("<h2 style='text-align: center;'>NET PROMOTER SCORE</h2>", unsafe_allow_html=True)
+            
+            # --- FILA 1: Distribución Detallada por Puntuación (0-10) ---
+            fig_detail, ax_detail = plt.subplots(figsize=(12, 4))
+            ax_detail.set_xlim(-0.5, 10.5)
+            ax_detail.set_ylim(0, 4)
+            ax_detail.axis('off')
+            
+            emojis = ["😡", "😠", "☹️", "🙁", "😐", "😕", "😶", "😌", "😊", "😀", "😁"]
+            
+            for i in range(11):
+                # Determinar color
+                color = color_det if i <= 6 else (color_pas if i <= 8 else color_pro)
+                
+                # Dibujar círculo de emoji
+                ax_detail.text(i, 3, emojis[i], fontsize=30, ha='center', va='center', 
+                               bbox=dict(facecolor=color, edgecolor='none', boxstyle='circle', pad=0.3))
+                
+                # Cantidad de respuestas
+                ax_detail.text(i, 2.2, f"{nps_scores[i]}", fontsize=12, ha='center', fontweight='bold',
+                               bbox=dict(facecolor='#333', edgecolor='none', boxstyle='round,pad=0.3', fontcolor='white'),
+                               color='white')
+                
+                # Círculo con el número de puntuación
+                ax_detail.text(i, 1.4, f"{i}", fontsize=14, ha='center', va='center', color='white', fontweight='bold',
+                               bbox=dict(facecolor=color, edgecolor='none', boxstyle='circle', pad=0.4))
 
-            st.pyplot(fig_nps)
+            # Etiquetas de categorías
+            ax_detail.text(3, 0.7, "DETRACTORS", fontsize=10, ha='center', fontweight='bold', color='#555')
+            ax_detail.text(7.5, 0.7, "PASSIVES", fontsize=10, ha='center', fontweight='bold', color='#555')
+            ax_detail.text(9.5, 0.7, "PROMOTERS", fontsize=10, ha='center', fontweight='bold', color='#555')
+            
+            # Líneas de escala (barras de colores debajo)
+            ax_detail.plot([-0.2, 6.2], [1, 1], color=color_det, lw=8, solid_capstyle='round', alpha=0.3)
+            ax_detail.plot([6.8, 8.2], [1, 1], color=color_pas, lw=8, solid_capstyle='round', alpha=0.3)
+            ax_detail.plot([8.8, 10.2], [1, 1], color=color_pro, lw=8, solid_capstyle='round', alpha=0.3)
+            
+            st.pyplot(fig_detail)
+            
+            # --- FILA 2: Fórmula y Métricas ---
+            st.markdown(f"<h3 style='text-align: center;'>NPS = <span style='color:{color_pro}'>%PROMOTERS</span> - <span style='color:{color_det}'>%DETRACTORS</span></h3>", unsafe_allow_html=True)
+            
+            col_met1, col_met2, col_met3 = st.columns([1.5, 3, 1])
+            
+            with col_met1:
+                # Donut Chart
+                fig_donut, ax_donut = plt.subplots(figsize=(4, 4))
+                sizes = [max(0.1, pct_pro), max(0.1, pct_pas), max(0.1, pct_det)]
+                
+                ax_donut.pie(sizes, colors=[color_pro, color_pas, color_det], startangle=90, counterclock=False, 
+                             wedgeprops={'width': 0.3, 'edgecolor': 'w', 'linewidth': 2})
+                
+                ax_donut.text(0, 0, f"{int(nps_score)}", fontsize=40, ha='center', va='center', fontweight='bold')
+                st.pyplot(fig_donut)
+                
+            with col_met2:
+                st.write("") # Espaciador
+                # Estilo de las cajas de métricas
+                def metric_box(label, count, pct, color):
+                    st.markdown(f"""
+                        <div style='display: flex; align-items: center; margin-bottom: 10px;'>
+                            <div style='background-color:{color}; color:white; padding:10px 20px; border-radius:20px; width:150px; text-align:center; font-weight:bold; margin-right:10px;'>{label}</div>
+                            <div style='background-color:{color}; color:white; padding:10px; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; font-weight:bold; margin-right:10px;'>{count}</div>
+                            <div style='background-color:#F0F2F6; padding:10px 20px; border-radius:20px; width:100px; text-align:center; font-weight:bold;'>{pct:.1f}%</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                
+                metric_box("detractors", count_det, pct_det, color_det)
+                metric_box("passives", count_pas, pct_pas, color_pas)
+                metric_box("promoters", count_pro, pct_pro, color_pro)
+                
+            with col_met3:
+                st.markdown(f"""
+                    <div style='text-align: center; margin-top: 50px;'>
+                        <div style='background-color:#333; color:white; padding:5px 15px; border-radius:15px; display:inline-block; font-weight:bold;'>total</div>
+                        <div style='background-color:#AAA; color:white; width:80px; height:80px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:bold; margin: 10px auto;'>{total_respuestas}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown("---")
         else:
             st.warning("No se encontró información de NPS procesada.")
 
