@@ -176,23 +176,24 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
             st.write(inv_clean.select_dtypes(include=['object', 'string']).describe())
         
         st.write("**Visualizaciones Inventario**")
-        v_inv_col1, v_inv_col2 = st.columns(2)
-        with v_inv_col1:
-            num_cols_inv = inv_clean.select_dtypes(include=[np.number]).columns
-            if not num_cols_inv.empty:
-                st.write("*Boxplots Variables Numéricas*")
-                for col in num_cols_inv:
-                    fig, ax = plt.subplots(figsize=(5, 2))
-                    sns.boxplot(x=inv_clean[col], ax=ax)
+        num_cols_inv = inv_clean.select_dtypes(include=[np.number]).columns
+        if not num_cols_inv.empty:
+            st.write("*Boxplots Variables Numéricas*")
+            # Crear un grid de columnas para los boxplots (por ejemplo 3 columnas)
+            cols_grid = st.columns(3)
+            for i, col in enumerate(num_cols_inv):
+                with cols_grid[i % 3]:
+                    fig, ax = plt.subplots(figsize=(5, 3))
+                    sns.boxplot(x=inv_clean[col], ax=ax, color='skyblue')
                     ax.set_title(f"Distribución de {col}")
                     st.pyplot(fig)
-        with v_inv_col2:
-            cat_cols_inv = inv_clean.select_dtypes(include=['object', 'string']).columns
-            if 'Categoria' in cat_cols_inv:
-                st.write("*Distribución por Categoría*")
-                fig, ax = plt.subplots(figsize=(5, 3))
-                sns.countplot(y=inv_clean['Categoria'], ax=ax)
-                st.pyplot(fig)
+        
+        cat_cols_inv = inv_clean.select_dtypes(include=['object', 'string']).columns
+        if 'Categoria' in cat_cols_inv:
+            st.write("*Distribución por Categoría*")
+            fig, ax = plt.subplots(figsize=(8, 4))
+            sns.countplot(y=inv_clean['Categoria'], ax=ax, palette='viridis')
+            st.pyplot(fig)
 
         st.divider()
 
@@ -207,22 +208,22 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
             st.write(tx_clean.select_dtypes(include=['object', 'string']).describe())
 
         st.write("**Visualizaciones Transacciones**")
-        v_tx_col1, v_tx_col2 = st.columns(2)
-        with v_tx_col1:
-            num_cols_tx = tx_clean.select_dtypes(include=[np.number]).columns
-            if not num_cols_tx.empty:
-                st.write("*Boxplots Variables Numéricas*")
-                for col in num_cols_tx:
-                    fig, ax = plt.subplots(figsize=(5, 2))
-                    sns.boxplot(x=tx_clean[col], ax=ax)
+        num_cols_tx = tx_clean.select_dtypes(include=[np.number]).columns
+        if not num_cols_tx.empty:
+            st.write("*Boxplots Variables Numéricas*")
+            cols_grid_tx = st.columns(3)
+            for i, col in enumerate(num_cols_tx):
+                with cols_grid_tx[i % 3]:
+                    fig, ax = plt.subplots(figsize=(5, 3))
+                    sns.boxplot(x=tx_clean[col], ax=ax, color='lightgreen')
                     ax.set_title(f"Distribución de {col}")
                     st.pyplot(fig)
-        with v_tx_col2:
-            if 'Canal_Venta' in tx_clean.columns:
-                st.write("*Distribución por Canal de Venta*")
-                fig, ax = plt.subplots(figsize=(5, 3))
-                sns.countplot(x=tx_clean['Canal_Venta'], ax=ax)
-                st.pyplot(fig)
+        
+        if 'Canal_Venta' in tx_clean.columns:
+            st.write("*Distribución por Canal de Venta*")
+            fig, ax = plt.subplots(figsize=(8, 4))
+            sns.countplot(x=tx_clean['Canal_Venta'], ax=ax, palette='magma')
+            st.pyplot(fig)
 
         st.divider()
 
@@ -237,23 +238,23 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
             st.write(fb_clean.select_dtypes(include=['object', 'string']).describe())
 
         st.write("**Visualizaciones Feedback**")
-        v_fb_col1, v_fb_col2 = st.columns(2)
-        with v_fb_col1:
-            num_cols_fb = fb_clean.select_dtypes(include=[np.number]).columns
-            if not num_cols_fb.empty:
-                st.write("*Boxplots Variables Numéricas*")
-                for col in num_cols_fb:
-                    fig, ax = plt.subplots(figsize=(5, 2))
-                    sns.boxplot(x=fb_clean[col], ax=ax)
+        num_cols_fb = fb_clean.select_dtypes(include=[np.number]).columns
+        if not num_cols_fb.empty:
+            st.write("*Boxplots Variables Numéricas*")
+            cols_grid_fb = st.columns(3)
+            for i, col in enumerate(num_cols_fb):
+                with cols_grid_fb[i % 3]:
+                    fig, ax = plt.subplots(figsize=(5, 3))
+                    sns.boxplot(x=fb_clean[col], ax=ax, color='salmon')
                     ax.set_title(f"Distribución de {col}")
                     st.pyplot(fig)
-        with v_fb_col2:
-            if 'Satisfaccion_NPS_Grupo' in fb_clean.columns:
-                st.write("*Distribución Grupos NPS*")
-                fig, ax = plt.subplots(figsize=(5, 3))
-                sns.countplot(x=fb_clean['Satisfaccion_NPS_Grupo'], ax=ax)
-                plt.xticks(rotation=45)
-                st.pyplot(fig)
+        
+        if 'Satisfaccion_NPS_Grupo' in fb_clean.columns:
+            st.write("*Distribución Grupos NPS*")
+            fig, ax = plt.subplots(figsize=(8, 4))
+            sns.countplot(x=fb_clean['Satisfaccion_NPS_Grupo'], ax=ax, palette='rocket')
+            plt.xticks(rotation=45)
+            st.pyplot(fig)
 
     with tab2:
         st.header("Análisis de Salud: Inventario")
