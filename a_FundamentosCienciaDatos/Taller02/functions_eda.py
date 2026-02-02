@@ -558,7 +558,10 @@ def feature_engineering(joined: pd.DataFrame) -> pd.DataFrame:
     # Días desde última revisión
     if "Ultima_Revision" in df.columns:
         today_dt = pd.Timestamp(datetime.now().date())
-        df["Ultima_Revision"] = pd.to_datetime(df["Ultima_Revision"], errors="coerce")
+        # NO reconvertir - ya viene como datetime del JOIN
+        # Solo asegurarse de que sea datetime si no lo es
+        if df["Ultima_Revision"].dtype == 'object':
+            df["Ultima_Revision"] = pd.to_datetime(df["Ultima_Revision"], errors="coerce")
         df["Dias_desde_revision"] = (today_dt - df["Ultima_Revision"].dt.floor("D")).dt.days
     
     return df
