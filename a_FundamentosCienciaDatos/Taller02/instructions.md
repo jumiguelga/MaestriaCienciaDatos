@@ -33,13 +33,8 @@ Los siguientes procesos de limpieza serán opcionales con opción desde el UI y 
 Antes de la limpieza de los dats, se debe de realizar una tabla con filas con anomalías, como datos nulos, outliers
 Después de la limpieza, se debe de generar un reporte con las filas que fueron limpiadas o eliminadas y el porcentaje que representan del total de filas.
 
-## Archivos: 
-Act2.py -> Referencia actual
+## Archivos:
 dictionaries.py : Continene los diccionarios para limpieza de datos.
 functions_eda.py : Funciones de limpieza y análisis exploratorio de datos (EDA).
 
 requirements.txt : Librerías necesarias para correr el código. (se debe de actualizar)
-
-
-## instrucciones finales
-Del archivo de referencia Act2.py tener presente todos los análisis estadísticos y visuales que se realizan, para incluirlos en la aplicación Streamlit, ajustados a las nuevas funciones de limpieza y EDA. Documentarlos muy bien para luego hacer ajustes de forma más natural.

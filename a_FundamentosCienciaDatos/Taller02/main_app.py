@@ -1,265 +1,234 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import functions_eda as feda
+import dictionaries as dicts
 from datetime import datetime
-from typing import Dict, Any
+import io
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.lib import colors
 
-# ===== IMPORTS LOCALES =====
-from functions_eda import (
-    sanitize_inventario,
-    sanitize_transacciones,
-    limpiar_feedback_basico,
-    imputar_costo_envio_knn,
-    excluir_ventas_cantidad_negativa,
-    corregir_o_excluir_ventas_futuras,
-    enriquecer_con_estado_envio_reglas,
-    filtrar_skus_fantasma,
-    excluir_feedback_duplicado,
-    build_join_dataset,
-    feature_engineering,
-)
-from health_report import compute_health_metrics
-from data_analysis import (
-    compute_analysis,
-    show_inventory_analysis,
-    show_transactions_analysis,
-    show_feedback_analysis,
-    show_p1_margen_negativo,
-    show_p2_logistica_nps,
-    show_p3_sku_fantasma,
-    show_p4_stock_nps,
-    show_p5_bodega_tickets,
-)
+# Configuración de la página
+st.set_page_config(page_title="Data Quality & EDA Dashboard", layout="wide")
 
-# ===== CONFIGURACIÓN STREAMLIT =====
-st.set_page_config(
-    page_title="Challenge 02 – Data Cleaning & Analysis",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+# --- ESTADO DE LA SESIÓN ---
+if 'logs' not in st.session_state:
+    st.session_state.logs = []
 
-st.title("🏢 Dashboard Integral: Limpieza, EDA y Análisis de Negocio")
-st.markdown("**Limpieza auditable | Health Score | JOIN | Feature Engineering | Análisis P1..P5**")
+def add_log(action):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    st.session_state.logs.append({"timestamp": timestamp, "action": action})
 
-# ===== SIDEBAR: CARGA DE DATOS =====
-st.sidebar.header("📂 1. Cargar Datos")
-
-inv_file = st.sidebar.file_uploader("Inventario (CSV)", type=["csv"], key="inv")
-tx_file = st.sidebar.file_uploader("Transacciones (CSV)", type=["csv"], key="tx")
-fb_file = st.sidebar.file_uploader("Feedback (CSV)", type=["csv"], key="fb")
-
-
-@st.cache_data
-def load_csv(file) -> pd.DataFrame:
-    return pd.read_csv(file)
-
-
-inventario_raw = load_csv(inv_file) if inv_file is not None else pd.DataFrame()
-transacciones_raw = load_csv(tx_file) if tx_file is not None else pd.DataFrame()
-feedback_raw = load_csv(fb_file) if fb_file is not None else pd.DataFrame()
-
-if inventario_raw.empty or transacciones_raw.empty or feedback_raw.empty:
-    st.warning("⚠️ Por favor carga los tres archivos CSV para iniciar el análisis.")
-    st.stop()
-
-st.success("✅ Archivos cargados correctamente.")
-
-# ===== SIDEBAR: OPCIONES DE LIMPIEZA OPCIONAL =====
-st.sidebar.header("⚙️ 2. Opciones de Limpieza (opcional)")
-
-opt_imputar_costo_envio = st.sidebar.checkbox(
-    "Imputar costo de envío (KNN)", value=False
-)
-opt_excluir_cant_neg = st.sidebar.checkbox(
-    "Excluir ventas con cantidad negativa", value=False
-)
-opt_modo_futuras = st.sidebar.selectbox(
-    "Ventas futuras",
-    ["no_tocar", "corregir", "excluir"],
-    index=0,
-)
-opt_estado_envio_reglas = st.sidebar.checkbox(
-    "Enriquecer con Estado_Envio_Reglas", value=False
-)
-opt_incluir_skus_fantasma = st.sidebar.checkbox(
-    "Incluir SKUs no en inventario", value=True
-)
-opt_excluir_feedback_dup = st.sidebar.checkbox(
-    "Excluir Feedback_ID duplicados", value=False
-)
-
-# ===== SECCIÓN 1: LIMPIEZA ESTÁNDAR =====
-st.header("1️⃣ Limpieza Estándar (Obligatoria)")
-
-with st.expander("📋 Expandir para ver resumen de limpieza", expanded=True):
-    inv_clean, inv_report = sanitize_inventario(inventario_raw)
-    tx_clean, tx_report = sanitize_transacciones(transacciones_raw)
-    fb_clean = limpiar_feedback_basico(feedback_raw)
+# --- FUNCIONES DE APOYO ---
+def generate_pdf_report():
+    buffer = io.BytesIO()
+    p = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
     
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.subheader("Inventario")
-        st.dataframe(inv_report, use_container_width=True)
-    with col2:
-        st.subheader("Transacciones")
-        st.dataframe(tx_report, use_container_width=True)
-    with col3:
-        st.subheader("Feedback")
-        st.metric("Filas iniciales", len(feedback_raw))
-        st.metric("Filas finales", len(fb_clean))
-
-# ===== SECCIÓN 2: LIMPIEZA OPCIONAL =====
-st.header("2️⃣ Limpieza Opcional")
-
-tx_final = tx_clean.copy()
-fb_final = fb_clean.copy()
-
-if opt_imputar_costo_envio and not tx_final.empty:
-    tx_final = imputar_costo_envio_knn(tx_final)
-    st.info("✅ Costo de envío imputado con KNN")
-
-if opt_excluir_cant_neg and not tx_final.empty:
-    tx_final = excluir_ventas_cantidad_negativa(tx_final)
-    st.info("✅ Ventas con cantidad negativa excluidas")
-
-if opt_modo_futuras != "no_tocar" and not tx_final.empty:
-    modo = "corregir" if opt_modo_futuras == "corregir" else "excluir"
-    tx_final = corregir_o_excluir_ventas_futuras(tx_final, modo=modo)
-    st.info(f"✅ Ventas futuras: {modo}")
-
-if opt_estado_envio_reglas and not tx_final.empty and not inv_clean.empty:
-    tx_final = enriquecer_con_estado_envio_reglas(tx_final, inventario=inv_clean)
-    st.info("✅ Estado_Envio_Reglas derivado")
-
-if not inv_clean.empty and not tx_final.empty:
-    tx_final = filtrar_skus_fantasma(
-        tx_final,
-        inventario=inv_clean,
-        incluir_fantasma=opt_incluir_skus_fantasma,
-    )
-
-if opt_excluir_feedback_dup and not fb_final.empty:
-    fb_final = excluir_feedback_duplicado(fb_final)
-    st.info("✅ Feedback_ID duplicados excluidos")
-
-col1, col2 = st.columns(2)
-with col1:
-    st.metric("Transacciones finales", len(tx_final))
-with col2:
-    st.metric("Feedback final", len(fb_final))
-
-# ===== SECCIÓN 3: HEALTH SCORE & OUTLIERS =====
-st.header("3️⃣ Health Score y Anomalías")
-
-flags = [
-    "Costo_Envio_Imputado",
-    "flag_sku_fantasma",
-    "flag_sin_feedback",
-    "outlier_costo",
-    "outlier_precio",
-]
-
-health = compute_health_metrics(
-    raw_df=transacciones_raw,
-    clean_df=tx_clean,
-    final_df=tx_final,
-    flags=flags,
-)
-
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.metric("Filas (raw)", health["rows_raw"])
-with col2:
-    st.metric("Filas (final)", health["rows_final"])
-with col3:
-    st.metric("Health Score (final)", f"{health['health_score_final']:.1f}%")
-with col4:
-    st.metric("Filas eliminadas", health["rows_removed"], delta=f"{health['pct_removed']}%", delta_color="inverse")
-
-with st.expander("📊 Detalles completos del Health Score y Outliers"):
-    st.json(health)
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(100, height - 50, "Reporte de Limpieza de Datos")
     
-    col_out1, col_out2 = st.columns(2)
-    with col_out1:
-        if "outlier_costo" in inv_clean.columns:
-            n_out_inv = inv_clean["outlier_costo"].sum()
-            st.warning(f"Outliers en Costo_Unitario: {int(n_out_inv)}")
-            if n_out_inv > 0:
-                st.dataframe(inv_clean[inv_clean["outlier_costo"]], use_container_width=True)
-    with col_out2:
-        if "outlier_precio" in tx_final.columns:
-            n_out_tx = tx_final["outlier_precio"].sum()
-            st.warning(f"Outliers en Precio_Venta: {int(n_out_tx)}")
-            if n_out_tx > 0:
-                st.dataframe(tx_final[tx_final["outlier_precio"]], use_container_width=True)
+    p.setFont("Helvetica", 12)
+    y = height - 80
+    for log in st.session_state.logs:
+        p.drawString(100, y, f"{log['timestamp']}: {log['action']}")
+        y -= 20
+        if y < 50:
+            p.showPage()
+            y = height - 50
+            
+    p.save()
+    buffer.seek(0)
+    return buffer
 
-# ===== SECCIÓN 4: JOIN DATASET =====
-st.header("4️⃣ Dataset Integrado (JOIN)")
+def compute_health_score(df_raw, df_clean):
+    if df_raw is None or df_raw.empty:
+        return 0, 0, 0
+    
+    total_rows = len(df_raw)
+    total_nulls = df_raw.isnull().sum().sum()
+    rows_cleaned = total_rows - len(df_clean)
+    
+    # Simple health score formula: (1 - (nulls / total_elements)) * 100
+    total_elements = df_raw.size
+    null_ratio = total_nulls / total_elements if total_elements > 0 else 0
+    health_score = (1 - null_ratio) * 100
+    
+    return health_score, total_nulls, rows_cleaned
 
-joined = build_join_dataset(tx_final, inv_clean, fb_final)
-joined = feature_engineering(joined)
+# --- SIDEBAR: CARGA DE DATOS ---
+st.sidebar.title("Configuración")
+uploaded_inv = st.sidebar.file_uploader("Cargar Inventario (CSV)", type=["csv"])
+uploaded_tx = st.sidebar.file_uploader("Cargar Transacciones (CSV)", type=["csv"])
+uploaded_fb = st.sidebar.file_uploader("Cargar Feedback (CSV)", type=["csv"])
 
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("Filas en JOIN", len(joined))
-with col2:
-    ingreso_total = joined.get("Ingreso", pd.Series([0])).sum()
-    st.metric("Ingreso total", f"${ingreso_total:,.0f}")
-with col3:
-    margen_total = joined.get("Margen_Bruto", pd.Series([0])).sum()
-    st.metric("Margen bruto", f"${margen_total:,.0f}")
+# Opciones de limpieza global
+st.sidebar.subheader("Opciones de Limpieza")
+exclude_outliers = st.sidebar.checkbox("Excluir Outliers", value=False)
+exclude_nulls = st.sidebar.checkbox("Excluir Filas con Nulos", value=False)
 
-with st.expander("🔍 Ver primeras filas del JOIN"):
-    st.dataframe(joined.head(20), use_container_width=True)
+if st.sidebar.button("Generar Log PDF"):
+    pdf_buf = generate_pdf_report()
+    st.sidebar.download_button(label="Descargar Reporte PDF", data=pdf_buf, file_name="cleaning_log.pdf", mime="application/pdf")
 
-# ===== SECCIÓN 5: ANÁLISIS P1..P5 =====
-st.header("5️⃣ Análisis de Negocio (P1..P5)")
+# --- LÓGICA PRINCIPAL ---
+if uploaded_inv and uploaded_tx and uploaded_fb:
+    # Cargar datos
+    inv_raw = pd.read_csv(uploaded_inv)
+    tx_raw = pd.read_csv(uploaded_tx)
+    fb_raw = pd.read_csv(uploaded_fb)
+    
+    # 1. Proceso de Limpieza Estándar
+    inv_clean, inv_report = feda.sanitize_inventario(inv_raw)
+    tx_clean, tx_report = feda.sanitize_transacciones(tx_raw)
+    fb_clean = feda.limpiar_feedback_basico(fb_raw)
+    
+    # Logging inicial
+    if 'initial_clean' not in st.session_state:
+        add_log("Carga de archivos y limpieza inicial ejecutada.")
+        st.session_state.initial_clean = True
 
-analysis_results = compute_analysis(joined)
+    # 2. Procesos de Limpieza Opcionales (Transacciones)
+    st.sidebar.subheader("Limpieza Opcional Transacciones")
+    impute_knn = st.sidebar.checkbox("Imputar Costo Envío (KNN)", value=False)
+    if impute_knn:
+        tx_clean = feda.imputar_costo_envio_knn(tx_clean)
+        add_log("Imputación KNN de Costo Envío realizada.")
+        
+    exclude_neg_qty = st.sidebar.checkbox("Excluir Cantidades Negativas", value=False)
+    if exclude_neg_qty:
+        tx_clean = feda.excluir_ventas_cantidad_negativa(tx_clean)
+        add_log("Cantidades negativas excluidas.")
+        
+    future_date_mode = st.sidebar.radio("Ventas Futuras", ["Mantener", "Corregir (Año -1)", "Excluir"])
+    if future_date_mode == "Corregir (Año -1)":
+        tx_clean = feda.corregir_o_excluir_ventas_futuras(tx_clean, modo="corregir")
+        add_log("Fechas futuras corregidas.")
+    elif future_date_mode == "Excluir":
+        tx_clean = feda.corregir_o_excluir_ventas_futuras(tx_clean, modo="excluir")
+        add_log("Fechas futuras excluidas.")
+        
+    include_ghost_skus = st.sidebar.checkbox("Incluir SKUs inexistentes en Inventario", value=True)
+    tx_clean = feda.filtrar_skus_fantasma(tx_clean, inv_clean, incluir_fantasma=include_ghost_skus)
+    if not include_ghost_skus:
+        add_log("SKUs fantasma excluidos.")
+    
+    # Feedback
+    exclude_fb_dupes = st.sidebar.checkbox("Excluir Feedback Duplicado", value=False)
+    if exclude_fb_dupes:
+        fb_clean = feda.excluir_feedback_duplicado(fb_clean)
+        add_log("Feedback duplicado excluido.")
 
-# Tabs para cada análisis
-tab_p1, tab_p2, tab_p3, tab_p4, tab_p5 = st.tabs([
-    "P1 — Margen Negativo",
-    "P2 — Logística vs NPS",
-    "P3 — SKU Fantasma",
-    "P4 — Stock vs NPS",
-    "P5 — Bodega Tickets"
-])
+    # Exclusión global de Outliers/Nulos
+    if exclude_outliers:
+        if 'outlier_costo' in inv_clean.columns:
+            inv_clean = inv_clean[inv_clean['outlier_costo'] == False]
+        if 'outlier_precio' in tx_clean.columns:
+            tx_clean = tx_clean[tx_clean['outlier_precio'] == False]
+        add_log("Outliers excluidos globalmente.")
 
-with tab_p1:
-    show_p1_margen_negativo(analysis_results)
+    if exclude_nulls:
+        inv_clean = inv_clean.dropna()
+        tx_clean = tx_clean.dropna()
+        fb_clean = fb_clean.dropna()
+        add_log("Filas con nulos excluidas globalmente.")
 
-with tab_p2:
-    show_p2_logistica_nps(analysis_results)
+    # JOIN Final para EDA
+    joined_df = feda.build_join_dataset(tx_clean, inv_clean, fb_clean)
+    joined_df = feda.feature_engineering(joined_df)
 
-with tab_p3:
-    show_p3_sku_fantasma(analysis_results)
+    # --- TABS ---
+    tab1, tab2, tab3, tab4 = st.tabs(["EDA General", "Salud Inventario", "Salud Transacciones", "Salud NPS"])
 
-with tab_p4:
-    show_p4_stock_nps(analysis_results)
+    with tab1:
+        st.header("Análisis Exploratorio de Datos (EDA)")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Estadísticas Cuantitativas")
+            st.write(joined_df.describe())
+            
+        with col2:
+            st.subheader("Estadísticas Cualitativas")
+            st.write(joined_df.select_dtypes(include=['object', 'string']).describe())
 
-with tab_p5:
-    show_p5_bodega_tickets(analysis_results)
+        st.subheader("Visualizaciones")
+        viz_col1, viz_col2 = st.columns(2)
+        
+        with viz_col1:
+            st.write("**Distribución de Ingresos**")
+            fig, ax = plt.subplots()
+            sns.histplot(joined_df['Ingreso'], kde=True, ax=ax)
+            st.pyplot(fig)
+            
+        with viz_col2:
+            st.write("**Outliers en Costo Unitario (Inventario)**")
+            fig, ax = plt.subplots()
+            sns.boxplot(x=inv_clean['Costo_Unitario_USD'], ax=ax)
+            st.pyplot(fig)
 
-# ===== SECCIÓN 6: EDA GENERAL =====
-st.header("6️⃣ Análisis Exploratorio (EDA)")
+    with tab2:
+        st.header("Análisis de Salud: Inventario")
+        h_score, nulls, cleaned = compute_health_score(inv_raw, inv_clean)
+        
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Health Score", f"{h_score:.2f}%")
+        c2.metric("Nulos Totales (Raw)", nulls)
+        c3.metric("Filas Removidas/Filtradas", cleaned)
+        
+        st.subheader("Reporte de Procesos de Limpieza")
+        st.table(inv_report)
+        
+        st.subheader("Muestra de Datos Limpios")
+        st.dataframe(inv_clean.head(20))
 
-tab_inv, tab_tx, tab_fb = st.tabs(["📦 Inventario", "🚚 Transacciones", "💬 Feedback"])
+    with tab3:
+        st.header("Análisis de Salud: Transacciones")
+        h_score, nulls, cleaned = compute_health_score(tx_raw, tx_clean)
+        
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Health Score", f"{h_score:.2f}%")
+        c2.metric("Nulos Totales (Raw)", nulls)
+        c3.metric("Filas Removidas/Filtradas", cleaned)
+        
+        st.subheader("Productos en Transacciones no existentes en Inventario")
+        ghost_skus = tx_clean[tx_clean['flag_sku_fantasma'] == True]
+        st.write(f"Total de registros con SKUs faltantes: {len(ghost_skus)}")
+        if not ghost_skus.empty:
+            st.dataframe(ghost_skus[['SKU_ID', 'Transaccion_ID']].drop_duplicates().head(10))
 
-with tab_inv:
-    show_inventory_analysis(inv_clean)
+        st.subheader("Reporte de Procesos de Limpieza")
+        st.table(tx_report)
 
-with tab_tx:
-    show_transactions_analysis(tx_final)
+    with tab4:
+        st.header("Análisis de Salud: NPS (Feedback)")
+        h_score, nulls, cleaned = compute_health_score(fb_raw, fb_clean)
+        
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Health Score", f"{h_score:.2f}%")
+        c2.metric("Nulos Totales (Raw)", nulls)
+        c3.metric("Filas Removidas/Filtradas", cleaned)
+        
+        if 'Satisfaccion_NPS_Grupo' in fb_clean.columns:
+            st.subheader("Distribución de NPS")
+            fig, ax = plt.subplots()
+            fb_clean['Satisfaccion_NPS_Grupo'].value_counts().plot(kind='pie', autopct='%1.1f%%', ax=ax)
+            ax.set_ylabel('')
+            st.pyplot(fig)
+            
+            st.subheader("Detalle de Grupos NPS")
+            st.bar_chart(fb_clean['Satisfaccion_NPS_Grupo'].value_counts())
+        else:
+            st.warning("No se encontró información de NPS procesada.")
 
-with tab_fb:
-    show_feedback_analysis(fb_final)
-
-# ===== PIE DE PÁGINA =====
-st.divider()
-st.markdown(
-    """
-    ---
-    **Dashboard de Limpieza y Análisis Integral**  
-    Limpieza estándar + Limpieza opcional + Health Score + JOIN + Feature Engineering + P1..P5
-    """
-)
+else:
+    st.info("Por favor, carga los tres archivos CSV en el panel lateral para comenzar.")
+    
+    # Placeholder for structure info if user needs help
+    with st.expander("Ver estructura esperada de archivos"):
+        st.write("**Inventario:** SKU_ID, Stock_Actual, Costo_Unitario_USD, Categoria, Bodega_Origen, Lead_Time_Dias, Ultima_Revision")
+        st.write("**Transacciones:** Transaccion_ID, SKU_ID, Fecha_Venta, Cantidad_Vendida, Precio_Venta_Final, Ciudad_Destino, Canal_Venta, Estado_Envio")
+        st.write("**Feedback:** Feedback_ID, Transaccion_ID, Satisfaccion_NPS, Comentario_Texto, Recomienda_Marca")
