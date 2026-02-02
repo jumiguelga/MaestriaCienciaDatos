@@ -181,10 +181,11 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
             num_cols_inv = inv_clean.select_dtypes(include=[np.number]).columns
             if not num_cols_inv.empty:
                 st.write("*Boxplots Variables Numéricas*")
-                fig, ax = plt.subplots(figsize=(5, 3))
-                sns.boxplot(data=inv_clean[num_cols_inv], ax=ax)
-                plt.xticks(rotation=45)
-                st.pyplot(fig)
+                for col in num_cols_inv:
+                    fig, ax = plt.subplots(figsize=(5, 2))
+                    sns.boxplot(x=inv_clean[col], ax=ax)
+                    ax.set_title(f"Distribución de {col}")
+                    st.pyplot(fig)
         with v_inv_col2:
             cat_cols_inv = inv_clean.select_dtypes(include=['object', 'string']).columns
             if 'Categoria' in cat_cols_inv:
@@ -211,10 +212,11 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
             num_cols_tx = tx_clean.select_dtypes(include=[np.number]).columns
             if not num_cols_tx.empty:
                 st.write("*Boxplots Variables Numéricas*")
-                fig, ax = plt.subplots(figsize=(5, 3))
-                sns.boxplot(data=tx_clean[num_cols_tx], ax=ax)
-                plt.xticks(rotation=45)
-                st.pyplot(fig)
+                for col in num_cols_tx:
+                    fig, ax = plt.subplots(figsize=(5, 2))
+                    sns.boxplot(x=tx_clean[col], ax=ax)
+                    ax.set_title(f"Distribución de {col}")
+                    st.pyplot(fig)
         with v_tx_col2:
             if 'Canal_Venta' in tx_clean.columns:
                 st.write("*Distribución por Canal de Venta*")
@@ -240,10 +242,11 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
             num_cols_fb = fb_clean.select_dtypes(include=[np.number]).columns
             if not num_cols_fb.empty:
                 st.write("*Boxplots Variables Numéricas*")
-                fig, ax = plt.subplots(figsize=(5, 3))
-                sns.boxplot(data=fb_clean[num_cols_fb], ax=ax)
-                plt.xticks(rotation=45)
-                st.pyplot(fig)
+                for col in num_cols_fb:
+                    fig, ax = plt.subplots(figsize=(5, 2))
+                    sns.boxplot(x=fb_clean[col], ax=ax)
+                    ax.set_title(f"Distribución de {col}")
+                    st.pyplot(fig)
         with v_fb_col2:
             if 'Satisfaccion_NPS_Grupo' in fb_clean.columns:
                 st.write("*Distribución Grupos NPS*")
