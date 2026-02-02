@@ -52,7 +52,7 @@ def detectar_outliers_multicolumna(df: pd.DataFrame, k: float = 1.5) -> pd.DataF
     num_cols = df.select_dtypes(include=[np.number]).columns
     # Evitar columnas que ya son flags o IDs si es posible, pero por ahora todas las numéricas
     outlier_mask = pd.Series(False, index=df.index)
-    
+
     for col in num_cols:
         # Ignorar columnas de tipo ID o flags conocidas si se desea, 
         # pero el requerimiento pide "todas las columnas numéricas"
@@ -60,7 +60,7 @@ def detectar_outliers_multicolumna(df: pd.DataFrame, k: float = 1.5) -> pd.DataF
             continue
         mask = outlier_flag_iqr(df, col, k)
         outlier_mask = outlier_mask | mask
-        
+
     df["Es_Outlier"] = outlier_mask
     return df
 
@@ -76,7 +76,7 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
     df = dataframe.copy()
     report = {}
 
-# 1. Remover espacios en blanco y normalizar texto
+    # 1. Remover espacios en blanco y normalizar texto
     cat_cols = df.select_dtypes(include=["object", "string"]).columns
     affected_norm = 0
     id_cols = ["SKU_ID", "Transaccion_ID", "Feedback_ID"]
@@ -101,7 +101,7 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
     if "Ultima_Revision" in df.columns:
         before_invalid_dates = df["Ultima_Revision"].isnull().sum()
         df["Ultima_Revision"] = pd.to_datetime(
-            df["Ultima_Revision"], format="%Y-%m-%d", errors="coerce"
+            df["Ultima_Revision"], errors="coerce"
         )
         after_invalid_dates = df["Ultima_Revision"].isnull().sum()
         report["Conversión de fechas inválidas a NaT"] = int(
@@ -119,8 +119,8 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
     # 5. Normalización de Bodega_Origen
     if "Bodega_Origen" in df.columns:
         before_bodega = (
-            df["Bodega_Origen"].notnull()
-            & df["Bodega_Origen"].isin(dicts.mapping_bodegas.keys())
+                df["Bodega_Origen"].notnull()
+                & df["Bodega_Origen"].isin(dicts.mapping_bodegas.keys())
         ).sum()
         df["Bodega_Origen"] = (
             df["Bodega_Origen"]
@@ -212,8 +212,8 @@ def sanitize_transacciones(dataframe: pd.DataFrame, normalize_status: bool = Tru
     # 3. Normalización de Ciudades Destino
     if "Ciudad_Destino" in df.columns:
         before_city = (
-            df["Ciudad_Destino"].notnull()
-            & df["Ciudad_Destino"].isin(dicts.mapping_ciudades_destino.keys())
+                df["Ciudad_Destino"].notnull()
+                & df["Ciudad_Destino"].isin(dicts.mapping_ciudades_destino.keys())
         ).sum()
         df["Ciudad_Destino"] = (
             df["Ciudad_Destino"]
@@ -226,8 +226,8 @@ def sanitize_transacciones(dataframe: pd.DataFrame, normalize_status: bool = Tru
     # 4. Normalización de Canal_Venta
     if "Canal_Venta" in df.columns:
         before_channel = (
-            df["Canal_Venta"].notnull()
-            & df["Canal_Venta"].isin(dicts.mapping_canal_venta.keys())
+                df["Canal_Venta"].notnull()
+                & df["Canal_Venta"].isin(dicts.mapping_canal_venta.keys())
         ).sum()
         df["Canal_Venta"] = (
             df["Canal_Venta"]
@@ -241,8 +241,8 @@ def sanitize_transacciones(dataframe: pd.DataFrame, normalize_status: bool = Tru
     if "Estado_Envio" in df.columns:
         if normalize_status:
             before_status = (
-                df["Estado_Envio"].notnull()
-                & df["Estado_Envio"].isin(dicts.mapping_estado_envio.keys())
+                    df["Estado_Envio"].notnull()
+                    & df["Estado_Envio"].isin(dicts.mapping_estado_envio.keys())
             ).sum()
             df["Estado_Envio"] = (
                 df["Estado_Envio"]
@@ -275,26 +275,26 @@ def imputar_costo_envio_knn(transacciones, n_neighbors=5):
     """
     df = transacciones.copy()
     df["Costo_Envio_Original"] = df["Costo_Envio"]
-    
+
     cols_base = [
         "Costo_Envio",
         "Cantidad_Vendida",
         "Precio_Venta_Final",
         "Tiempo_Entrega_Real",
     ]
-    
+
     for c in cols_base:
         if c not in df.columns:
             raise ValueError(f"La columna '{c}' no existe en el DataFrame")
-    
+
     df_knn = df[cols_base].copy()
     imputer = KNNImputer(n_neighbors=n_neighbors, weights="uniform")
     imputed_array = imputer.fit_transform(df_knn)
     df_imputed = pd.DataFrame(imputed_array, columns=cols_base, index=df.index)
-    
+
     df["Costo_Envio_Imputado"] = df["Costo_Envio_Original"].isna().astype(int)
     df["Costo_Envio"] = df_imputed["Costo_Envio"]
-    
+
     return df
 
 
@@ -306,8 +306,8 @@ def excluir_ventas_cantidad_negativa(transacciones: pd.DataFrame) -> pd.DataFram
 
 
 def corregir_o_excluir_ventas_futuras(
-    transacciones: pd.DataFrame,
-    modo: str = "corregir",
+        transacciones: pd.DataFrame,
+        modo: str = "corregir",
 ) -> pd.DataFrame:
     """
     Manejo de ventas futuras:
@@ -327,14 +327,14 @@ def corregir_o_excluir_ventas_futuras(
         df = df[~future_mask].copy()
     else:
         raise ValueError("modo debe ser 'corregir' o 'excluir'")
-    
+
     return df
 
 
 def filtrar_skus_fantasma(
-    transacciones: pd.DataFrame,
-    inventario: pd.DataFrame,
-    incluir_fantasma: bool = True,
+        transacciones: pd.DataFrame,
+        inventario: pd.DataFrame,
+        incluir_fantasma: bool = True,
 ) -> pd.DataFrame:
     """
     Maneja SKUs presentes en transacciones pero no en inventario.
@@ -343,10 +343,10 @@ def filtrar_skus_fantasma(
     """
     df = transacciones.copy()
     inv_skus = set(inventario["SKU_ID"].astype("string").str.strip())
-    
+
     df["SKU_ID"] = df["SKU_ID"].astype("string").str.strip()
     df["flag_sku_fantasma"] = ~df["SKU_ID"].isin(inv_skus)
-    
+
     if incluir_fantasma:
         return df
     else:
@@ -424,10 +424,10 @@ def parse_lead_time_to_days(value):
 
 
 def enriquecer_con_estado_envio_reglas(
-    transacciones: pd.DataFrame,
-    inventario: pd.DataFrame,
-    hoy: str = "2026-02-01",
-    margen_dias: int = 2,
+        transacciones: pd.DataFrame,
+        inventario: pd.DataFrame,
+        hoy: str = "2026-02-01",
+        margen_dias: int = 2,
 ) -> pd.DataFrame:
     """Enriquece transacciones con Lead_Time_Dias numérico y Estado_Envio_Reglas."""
     df = transacciones.copy()
@@ -475,9 +475,9 @@ def enriquecer_con_estado_envio_reglas(
 # -------------------------------------------------------------------
 
 def build_join_dataset(
-    tx_final: pd.DataFrame,
-    inv_clean: pd.DataFrame,
-    fb_clean: pd.DataFrame,
+        tx_final: pd.DataFrame,
+        inv_clean: pd.DataFrame,
+        fb_clean: pd.DataFrame,
 ) -> pd.DataFrame:
     """
     Construye el JOIN final: Transacciones ↔ Inventario ↔ Feedback
@@ -486,34 +486,34 @@ def build_join_dataset(
     # 1. Preparar Inventario
     invj = inv_clean.copy()
     invj["SKU_ID"] = invj["SKU_ID"].astype("string").str.strip()
-    
+
     # IMPORTANTE: Convertir Ultima_Revision a datetime ANTES del merge
     if "Ultima_Revision" in invj.columns:
         invj["Ultima_Revision"] = pd.to_datetime(invj["Ultima_Revision"], errors="coerce")
-    
+
     # 2. Preparar Transacciones
     txj = tx_final.copy()
     txj["SKU_ID"] = txj["SKU_ID"].astype("string").str.strip()
     if "Transaccion_ID" in txj.columns:
         txj["Transaccion_ID"] = txj["Transaccion_ID"].astype("string").str.strip()
-    
+
     # 3. Preparar Feedback
     fbj = fb_clean.copy()
     if "Transaccion_ID" in fbj.columns:
         fbj["Transaccion_ID"] = fbj["Transaccion_ID"].astype("string").str.strip()
-    
+
     # 4. JOIN #1: Transacciones ← LEFT JOIN → Inventario (por SKU_ID)
     # Esto trae Ultima_Revision, Bodega_Origen, Stock_Actual, Costo_Unitario_USD, etc.
     joined = txj.merge(
-        invj, 
-        on="SKU_ID", 
-        how="left", 
+        invj,
+        on="SKU_ID",
+        how="left",
         suffixes=("", "_inv")
     )
-    
+
     # Flag para SKUs fantasma (sin match en inventario)
     joined["flag_sku_fantasma"] = joined["Bodega_Origen"].isna()
-    
+
     # 5. JOIN #2: (Tx + Inv) ← LEFT JOIN → Feedback (por Transaccion_ID)
     # Esto trae Ticket_Soporte_Abierto_Limpio, Satisfaccion_NPS, etc.
     joined = joined.merge(
@@ -522,10 +522,10 @@ def build_join_dataset(
         how="left",
         suffixes=("", "_fb")
     )
-    
+
     # Flag para transacciones sin feedback
     joined["flag_sin_feedback"] = joined["Ticket_Soporte_Abierto_Limpio"].isna()
-    
+
     return joined
 
 
@@ -538,23 +538,23 @@ def feature_engineering(joined: pd.DataFrame) -> pd.DataFrame:
     Crea features: Ingreso, Costo_producto, Margen_Bruto, Margen_Neto_aprox, Dias_desde_revision
     """
     df = joined.copy()
-    
+
     # Conversión a numérico
     df["Cantidad_Vendida"] = pd.to_numeric(df.get("Cantidad_Vendida", 0), errors="coerce").fillna(0)
     df["Precio_Venta_Final"] = pd.to_numeric(df.get("Precio_Venta_Final", 0), errors="coerce").fillna(0)
     df["Costo_Unitario_USD"] = pd.to_numeric(df.get("Costo_Unitario_USD", 0), errors="coerce").fillna(0)
     df["Costo_Envio"] = pd.to_numeric(df.get("Costo_Envio", 0), errors="coerce").fillna(0)
     df["Stock_Actual"] = pd.to_numeric(df.get("Stock_Actual", 0), errors="coerce").fillna(0)
-    
+
     # Ingreso, Costos, Márgenes
     # Si Costo_Unitario_USD vino de Inventario, ahora se llama Costo_Unitario_USD (o Costo_Unitario_USD_inv si hubo colisión)
     costo_col = "Costo_Unitario_USD" if "Costo_Unitario_USD" in df.columns else "Costo_Unitario_USD_inv"
-    
+
     df["Ingreso"] = df["Cantidad_Vendida"] * df["Precio_Venta_Final"]
     df["Costo_producto"] = df["Cantidad_Vendida"] * pd.to_numeric(df.get(costo_col, 0), errors="coerce").fillna(0)
     df["Margen_Bruto"] = df["Ingreso"] - df["Costo_producto"]
     df["Margen_Neto_aprox"] = df["Margen_Bruto"] - df["Costo_Envio"]
-    
+
     # Días desde última revisión
     if "Ultima_Revision" in df.columns:
         today_dt = pd.Timestamp(datetime.now().date())
@@ -563,16 +563,16 @@ def feature_engineering(joined: pd.DataFrame) -> pd.DataFrame:
         if df["Ultima_Revision"].dtype == 'object':
             df["Ultima_Revision"] = pd.to_datetime(df["Ultima_Revision"], errors="coerce")
         df["Dias_desde_revision"] = (today_dt - df["Ultima_Revision"].dt.floor("D")).dt.days
-    
+
     return df
 
 
 def aplicar_exclusion_global(
-    inv_df: pd.DataFrame, 
-    tx_df: pd.DataFrame, 
-    fb_df: pd.DataFrame, 
-    exclude_outliers: bool = False, 
-    exclude_nulls: bool = False
+        inv_df: pd.DataFrame,
+        tx_df: pd.DataFrame,
+        fb_df: pd.DataFrame,
+        exclude_outliers: bool = False,
+        exclude_nulls: bool = False
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Aplica exclusión de outliers y nulos de forma global a los tres datasets.
@@ -585,10 +585,10 @@ def aplicar_exclusion_global(
         # Detectar outliers en todas las columnas numéricas para cada dataset
         inv_c = detectar_outliers_multicolumna(inv_c)
         inv_c = inv_c[inv_c["Es_Outlier"] == False].drop(columns=["Es_Outlier"])
-        
+
         tx_c = detectar_outliers_multicolumna(tx_c)
         tx_c = tx_c[tx_c["Es_Outlier"] == False].drop(columns=["Es_Outlier"])
-        
+
         fb_c = detectar_outliers_multicolumna(fb_c)
         fb_c = fb_c[fb_c["Es_Outlier"] == False].drop(columns=["Es_Outlier"])
 
