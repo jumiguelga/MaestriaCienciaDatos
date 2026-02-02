@@ -360,7 +360,8 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
             color_pro = "#4CAF50"
             
             # --- FILA 2: Fórmula y Métricas ---
-            st.markdown(f"<h3 style='text-align: center;'>NPS = <span style='color:{color_pro}'>%PROMOTERS</span> - <span style='color:{color_det}'>%DETRACTORS</span></h3>", unsafe_allow_html=True)
+            st.markdown(f"<h3 style='text-align: center;'>NPS = <span style='color:{color_pro}'>%PROMOTORES</span> - "
+                        f"<span style='color:{color_det}'>%DETRACTORES</span></h3>", unsafe_allow_html=True)
             
             col_met1, col_met2, col_met3 = st.columns([1.5, 3, 1])
             
@@ -387,9 +388,9 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
                         </div>
                     """, unsafe_allow_html=True)
                 
-                metric_box("detractors", count_det, pct_det, color_det)
-                metric_box("passives", count_pas, pct_pas, color_pas)
-                metric_box("promoters", count_pro, pct_pro, color_pro)
+                metric_box("detractores", count_det, pct_det, color_det)
+                metric_box("pasivos", count_pas, pct_pas, color_pas)
+                metric_box("promotores", count_pro, pct_pro, color_pro)
                 
             with col_met3:
                 st.markdown(f"""
