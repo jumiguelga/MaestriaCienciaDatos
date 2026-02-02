@@ -24,27 +24,48 @@ if 'fb_clean_adjusted' not in st.session_state:
 if 'age_outliers_log' not in st.session_state:
     st.session_state.age_outliers_log = pd.DataFrame()
 
+if 'user_comments' not in st.session_state:
+    st.session_state.user_comments = ""
+
 def add_log(action):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     st.session_state.logs.append({"timestamp": timestamp, "action": action})
 
 # --- FUNCIONES DE APOYO ---
-def generate_pdf_report():
+def generate_pdf_report(user_comments=""):
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
     
     p.setFont("Helvetica-Bold", 16)
-    p.drawString(100, height - 50, "Reporte de Limpieza de Datos")
+    p.drawString(100, height - 50, "Reporte de Calidad y Limpieza de Datos")
     
-    p.setFont("Helvetica", 12)
-    y = height - 80
+    p.setFont("Helvetica-Bold", 14)
+    p.drawString(100, height - 80, "Historial de Acciones:")
+    
+    p.setFont("Helvetica", 10)
+    y = height - 100
     for log in st.session_state.logs:
         p.drawString(100, y, f"{log['timestamp']}: {log['action']}")
-        y -= 20
-        if y < 50:
+        y -= 15
+        if y < 100:
             p.showPage()
             y = height - 50
+    
+    if user_comments:
+        y -= 20
+        if y < 150:
+            p.showPage()
+            y = height - 50
+        p.setFont("Helvetica-Bold", 14)
+        p.drawString(100, y, "Comentarios del Analista:")
+        y -= 20
+        p.setFont("Helvetica", 10)
+        # Manejo simple de multilínea
+        textobject = p.beginText(100, y)
+        for line in user_comments.split('\n'):
+            textobject.textLine(line)
+        p.drawText(textobject)
             
     p.save()
     buffer.seek(0)
@@ -77,8 +98,8 @@ exclude_outliers = st.sidebar.checkbox("Excluir Outliers", value=False)
 exclude_nulls = st.sidebar.checkbox("Excluir Filas con Nulos", value=False)
 
 if st.sidebar.button("Generar Log PDF"):
-    pdf_buf = generate_pdf_report()
-    st.sidebar.download_button(label="Descargar Reporte PDF", data=pdf_buf, file_name="cleaning_log.pdf", mime="application/pdf")
+    pdf_buf = generate_pdf_report(st.session_state.user_comments)
+    st.sidebar.download_button(label="Descargar Reporte PDF", data=pdf_buf, file_name="reporte_calidad.pdf", mime="application/pdf")
 
 # --- LÓGICA PRINCIPAL ---
 if uploaded_inv and uploaded_tx and uploaded_fb:
@@ -166,7 +187,7 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
     joined_df = feda.feature_engineering(joined_df)
 
     # --- TABS ---
-    tab1, tab2, tab3, tab4 = st.tabs(["EDA General", "Salud Inventario", "Salud Transacciones", "Salud NPS"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["EDA General", "Salud Inventario", "Salud Transacciones", "Salud NPS", "Reporte (Dashboard)"])
 
     with tab1:
         st.header("Análisis Exploratorio de Datos (EDA) por Dataset")
@@ -451,6 +472,254 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         else:
             # Si no existe la columna 'Edad', informamos (podría ser opcional en el CSV)
             st.info("La columna 'Edad' no está presente en el dataset de Feedback para el análisis de outliers.")
+
+    with tab5:
+        st.header("📊 Reporte de Calidad y Análisis de Negocio")
+        
+        # SECCIÓN 1: Métricas de Calidad de Datos
+        st.subheader("1️⃣ Métricas de Calidad de Datos")
+        
+        def get_top_nulls(df):
+            nulls = df.isnull().sum()
+            return nulls[nulls > 0].sort_values(ascending=False).head(5)
+
+        def count_outliers_multicol(df):
+            # Usamos la lógica de feda para consistencia
+            df_out = feda.detectar_outliers_multicolumna(df)
+            total = len(df_out)
+            count = df_out["Es_Outlier"].sum()
+            pct = (count / total * 100) if total > 0 else 0
+            return count, pct
+
+        # Métricas Inventario
+        inv_out_count, inv_out_pct = count_outliers_multicol(inv_raw)
+        inv_metrics = {
+            "Dataset": "Inventario",
+            "Registros Totales (Raw)": len(inv_raw),
+            "Registros Finales (Clean)": len(inv_clean),
+            "% Nulidad General": (inv_raw.isnull().sum().sum() / inv_raw.size * 100),
+            "Top 5 Nulos": str(get_top_nulls(inv_raw).to_dict()),
+            "Duplicados": inv_raw.duplicated().sum(),
+            "Outliers": f"{inv_out_count} ({inv_out_pct:.1f}%)"
+        }
+        
+        # Métricas Transacciones
+        tx_out_count, tx_out_pct = count_outliers_multicol(tx_raw)
+        tx_metrics = {
+            "Dataset": "Transacciones",
+            "Registros Totales (Raw)": len(tx_raw),
+            "Registros Finales (Clean)": len(tx_clean),
+            "% Nulidad General": (tx_raw.isnull().sum().sum() / tx_raw.size * 100),
+            "Top 5 Nulos": str(get_top_nulls(tx_raw).to_dict()),
+            "Duplicados": tx_raw.duplicated().sum(),
+            "Outliers": f"{tx_out_count} ({tx_out_pct:.1f}%)"
+        }
+        
+        # Métricas Feedback
+        fb_out_count, fb_out_pct = count_outliers_multicol(fb_raw)
+        fb_metrics = {
+            "Dataset": "Feedback",
+            "Registros Totales (Raw)": len(fb_raw),
+            "Registros Finales (Clean)": len(fb_clean),
+            "% Nulidad General": (fb_raw.isnull().sum().sum() / fb_raw.size * 100),
+            "Top 5 Nulos": str(get_top_nulls(fb_raw).to_dict()),
+            "Duplicados": fb_raw.duplicated().sum(),
+            "Outliers": f"{fb_out_count} ({fb_out_pct:.1f}%)"
+        }
+        
+        df_quality = pd.DataFrame([inv_metrics, tx_metrics, fb_metrics])
+        st.table(df_quality)
+        
+        # Visualización: Barras Apiladas
+        st.write("**Registros Originales vs Limpios vs Excluidos**")
+        data_viz = {
+            'Dataset': ['Inventario', 'Transacciones', 'Feedback'],
+            'Limpios': [len(inv_clean), len(tx_clean), len(fb_clean)],
+            'Excluidos': [len(inv_raw)-len(inv_clean), len(tx_raw)-len(tx_clean), len(fb_raw)-len(fb_clean)]
+        }
+        df_viz = pd.DataFrame(data_viz)
+        
+        fig_qual, ax_qual = plt.subplots(figsize=(10, 5))
+        df_viz.set_index('Dataset').plot(kind='bar', stacked=True, color=['#4CAF50', '#E91E63'], ax=ax_qual)
+        ax_qual.set_title("Estado de los Registros por Dataset")
+        ax_qual.set_ylabel("Cantidad de Registros")
+        st.pyplot(fig_qual)
+        
+        st.divider()
+        
+        # SECCIÓN 2: Decisiones Éticas de Limpieza
+        st.subheader("2️⃣ Decisiones Éticas de Limpieza")
+        col_log1, col_log2 = st.columns([2, 1])
+        
+        with col_log1:
+            st.write("**Log de Acciones de Limpieza**")
+            if st.session_state.logs:
+                log_df = pd.DataFrame(st.session_state.logs)
+                st.dataframe(log_df, use_container_width=True)
+            else:
+                st.info("No hay acciones registradas aún.")
+        
+        with col_log2:
+            st.write("**Comentarios del Analista**")
+            st.session_state.user_comments = st.text_area("Justificaciones éticas y observaciones:", 
+                                                         value=st.session_state.user_comments,
+                                                         placeholder="Escriba aquí sus comentarios...",
+                                                         height=200)
+
+        st.write("**Resumen de Decisiones de Imputación/Limpieza**")
+        imputacion_data = [
+            {"Variable": "Stock_Actual", "Acción Tomada": "Conversión/Imputación", "Método": "Absoluto y Fillna(0)", "Justificación": "Stock no puede ser negativo; nulos se asumen sin existencias."},
+            {"Variable": "Costo_Envio", "Acción Tomada": "Imputación (Opcional)", "Método": "KNN Imputer", "Justificación": "Recuperar datos perdidos basados en cercanía de otras variables logísticas."},
+            {"Variable": "Edad_Cliente", "Acción Tomada": "Imputación", "Método": "Mediana", "Justificación": "Valores > 100 son outliers biológicos improbables; se ajustan a la tendencia central."},
+            {"Variable": "Fechas_Venta", "Acción Tomada": "Corrección/Exclusión", "Método": "Año -1 / Drop", "Justificación": "Datos futuros son errores de entrada; se corrigen si es posible o se eliminan para no sesgar el histórico."}
+        ]
+        st.table(pd.DataFrame(imputacion_data))
+        
+        # Distribuciones antes/después (Ejemplo con Edad si fue ajustada)
+        if st.session_state.fb_clean_adjusted is not None:
+            st.write("**Impacto de la Imputación: Edad_Cliente**")
+            fig_age, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
+            sns.histplot(fb_raw['Edad_Cliente'].dropna(), ax=ax1, color='gray', kde=True)
+            ax1.set_title("Antes (Raw)")
+            sns.histplot(fb_clean['Edad_Cliente'], ax=ax2, color='salmon', kde=True)
+            ax2.set_title("Después (Limpios/Ajustados)")
+            st.pyplot(fig_age)
+
+        st.divider()
+        
+        # SECCIÓN 3: Análisis de SKUs Fantasma
+        st.subheader("3️⃣ Análisis de SKUs Fantasma")
+        ghost_skus_all = tx_clean[tx_clean['flag_sku_fantasma'] == True]
+        
+        if not ghost_skus_all.empty:
+            total_ghost_unique = ghost_skus_all['SKU_ID'].nunique()
+            total_tx_ghost = len(ghost_skus_all)
+            pct_tx_ghost = (total_tx_ghost / len(tx_clean) * 100)
+            
+            ghost_sales_val = (ghost_skus_all['Cantidad_Vendida'] * ghost_skus_all['Precio_Venta_Final']).sum()
+            total_sales_val = (tx_clean['Cantidad_Vendida'] * tx_clean['Precio_Venta_Final']).sum()
+            pct_sales_ghost = (ghost_sales_val / total_sales_val * 100) if total_sales_val > 0 else 0
+            
+            gs_c1, gs_c2, gs_c3 = st.columns(3)
+            gs_c1.metric("SKUs Únicos Fantasma", total_ghost_unique)
+            gs_c2.metric("Transacciones Afectadas", f"{total_tx_ghost} ({pct_tx_ghost:.2f}%)")
+            gs_c3.metric("Ventas Totales Fantasma", f"${ghost_sales_val:,.2f} ({pct_sales_ghost:.2f}%)")
+            
+            # Gráfico de barras horizontal TOP 10
+            st.write("**Top 10 SKUs Fantasma por Frecuencia**")
+            top_ghost = ghost_skus_all['SKU_ID'].value_counts().head(10).reset_index()
+            top_ghost.columns = ['SKU_ID', 'Frecuencia']
+            
+            fig_ghost, ax_ghost = plt.subplots(figsize=(8, 5))
+            sns.barplot(x='Frecuencia', y='SKU_ID', data=top_ghost, palette='Oranges_r', ax=ax_ghost)
+            ax_ghost.set_title("SKUs Fantasma más frecuentes")
+            st.pyplot(fig_ghost)
+            
+            with st.expander("Ver Tabla Detallada de SKUs Fantasma"):
+                # Agrupación para tabla detallada
+                ghost_details = ghost_skus_all.groupby('SKU_ID').agg({
+                    'Transaccion_ID': 'count',
+                    'Cantidad_Vendida': 'sum',
+                    'Precio_Venta_Final': 'sum' # Esto es suma de precios, quizás mejor Ingreso
+                }).reset_index()
+                ghost_details.columns = ['SKU_ID', 'Transacciones', 'Cant_Total', 'Ingreso_Total']
+                ghost_details = ghost_details.sort_values('Ingreso_Total', ascending=False)
+                st.dataframe(ghost_details, use_container_width=True)
+        else:
+            st.success("No se detectaron SKUs fantasma en el dataset actual.")
+
+        st.divider()
+        
+        # SECCIÓN 4: Margen Negativo (Fuga de Capital)
+        st.subheader("4️⃣ Fuga de Capital: SKUs con Margen Negativo")
+        
+        margen_negativo = joined_df[joined_df['Margen_Neto_aprox'] < 0].copy()
+        
+        if not margen_negativo.empty:
+            loss_unique_skus = margen_negativo['SKU_ID'].nunique()
+            loss_tx_count = len(margen_negativo)
+            total_loss = margen_negativo['Margen_Neto_aprox'].sum()
+            
+            total_revenue = joined_df['Ingreso'].sum()
+            pct_loss_tx = (loss_tx_count / len(joined_df) * 100) if len(joined_df) > 0 else 0
+            
+            mn_c1, mn_c2, mn_c3 = st.columns(3)
+            mn_c1.metric("SKUs con Margen Negativo", loss_unique_skus)
+            mn_c2.metric("Transacciones con Pérdida", f"{loss_tx_count} ({pct_loss_tx:.2f}%)")
+            mn_c3.metric("Pérdida Total Acumulada", f"${total_loss:,.2f}", delta_color="inverse")
+            
+            # Gráfico Top 10 Pérdidas
+            st.write("**Top 10 SKUs con Mayor Pérdida Acumulada**")
+            perdidas_por_sku = margen_negativo.groupby('SKU_ID').agg({
+                'Margen_Neto_aprox': 'sum',
+                'Transaccion_ID': 'count',
+                'Canal_Venta': lambda x: x.mode()[0] if not x.empty else 'Desconocido'
+            }).reset_index()
+            perdidas_por_sku.columns = ['SKU_ID', 'Perdida_Total', 'Num_Transacciones', 'Canal_Principal']
+            top_perdidas = perdidas_por_sku.sort_values('Perdida_Total').head(10) # Más negativo
+            
+            fig_loss, ax_loss = plt.subplots(figsize=(8, 5))
+            sns.barplot(x=top_perdidas['Perdida_Total'].abs(), y=top_perdidas['SKU_ID'], palette='Reds_r', ax=ax_loss)
+            ax_loss.set_title("Top 10 SKUs con mayor Fuga de Capital")
+            ax_loss.set_xlabel("Pérdida Acumulada (Valor Absoluto)")
+            st.pyplot(fig_loss)
+            
+            st.write("**Distribución de Margen Negativo por Canal de Venta**")
+            canal_loss = margen_negativo.groupby('Canal_Venta')['Margen_Neto_aprox'].sum().reset_index()
+            st.table(canal_loss.sort_values('Margen_Neto_aprox'))
+        else:
+            st.success("No se detectaron transacciones con margen neto negativo.")
+
+        st.divider()
+        
+        # SECCIÓN 5: Crisis Logística y Correlación NPS
+        st.subheader("5️⃣ Crisis Logística: Correlación Tiempo de Entrega vs NPS")
+        
+        # Filtrar datos válidos
+        analisis_log = joined_df[
+            (joined_df['Tiempo_Entrega_Real'].notna()) & 
+            (joined_df['Satisfaccion_NPS'].notna()) &
+            (joined_df['Bodega_Origen'].notna()) &
+            (joined_df['Ciudad_Destino'].notna())
+        ].copy()
+        
+        if not analisis_log.empty:
+            # Correlación por Bodega-Ciudad
+            def get_corr(x):
+                if len(x) > 5:
+                    return x[['Tiempo_Entrega_Real', 'Satisfaccion_NPS']].corr().iloc[0, 1]
+                return np.nan
+
+            res_corr = analisis_log.groupby(['Bodega_Origen', 'Ciudad_Destino']).apply(get_corr).reset_index(name='Correlacion')
+            
+            metricas_log = analisis_log.groupby(['Bodega_Origen', 'Ciudad_Destino']).agg({
+                'Tiempo_Entrega_Real': 'mean',
+                'Satisfaccion_NPS': 'mean',
+                'Transaccion_ID': 'count'
+            }).reset_index()
+            
+            resultado_log = res_corr.merge(metricas_log, on=['Bodega_Origen', 'Ciudad_Destino'])
+            resultado_log = resultado_log.sort_values('Correlacion')
+            
+            # Heatmap
+            st.write("**Heatmap de Correlación: Tiempo Entrega vs NPS**")
+            pivot_corr = resultado_log.pivot(index="Ciudad_Destino", columns="Bodega_Origen", values="Correlacion")
+            
+            fig_heat, ax_heat = plt.subplots(figsize=(10, 8))
+            sns.heatmap(pivot_corr, annot=True, cmap='RdYlGn', center=0, ax=ax_heat)
+            ax_heat.set_title("Correlación de Pearson (Negativo = Rojo)")
+            st.pyplot(fig_heat)
+            
+            # Identificación zona crítica
+            criticos = resultado_log[(resultado_log['Correlacion'] < -0.5) & (resultado_log['Transaccion_ID'] > 2)]
+            if not criticos.empty:
+                peor = criticos.iloc[0]
+                st.error(f"🚨 **ZONA CRÍTICA DETECTADA:** La ruta desde **{peor['Bodega_Origen']}** hacia **{peor['Ciudad_Destino']}** tiene una correlación de **{peor['Correlacion']:.2f}**. Requiere cambio inmediato de operador logístico.")
+            
+            with st.expander("Ver Tabla Completa de Correlación Logística"):
+                st.dataframe(resultado_log, use_container_width=True)
+        else:
+            st.info("No hay suficientes datos cruzados (Entrega + NPS) para realizar el análisis de correlación.")
 
 else:
     st.info("Por favor, carga los tres archivos CSV en el panel lateral para comenzar.")
