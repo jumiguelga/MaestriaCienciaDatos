@@ -243,18 +243,26 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         c1.metric("Health Score", f"{h_score:.2f}%")
         c2.metric("Nulos Totales (Raw)", nulls)
         c3.metric("Filas Removidas/Filtradas", cleaned)
-        
+
         if 'Satisfaccion_NPS_Grupo' in fb_clean.columns:
             st.subheader("Distribución de NPS")
-            fig, ax = plt.subplots()
-            fb_clean['Satisfaccion_NPS_Grupo'].value_counts().plot(kind='pie', autopct='%1.1f%%', ax=ax)
+        
+            # Ajusta el tamaño de la figura (ancho, alto) en pulgadas
+            fig, ax = plt.subplots(figsize=(6, 6))  # Más pequeño que el default (8, 6)
+        
+            fb_clean['Satisfaccion_NPS_Grupo'].value_counts().plot(
+                kind='pie',
+                autopct='%1.1f%%',
+                ax=ax
+            )
             ax.set_ylabel('')
             st.pyplot(fig)
-            
+        
             st.subheader("Detalle de Grupos NPS")
             st.bar_chart(fb_clean['Satisfaccion_NPS_Grupo'].value_counts())
         else:
             st.warning("No se encontró información de NPS procesada.")
+
 
 else:
     st.info("Por favor, carga los tres archivos CSV en el panel lateral para comenzar.")
