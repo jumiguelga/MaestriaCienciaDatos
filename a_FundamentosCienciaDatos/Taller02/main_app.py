@@ -905,12 +905,21 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         y cómo impacta esto en la satisfacción del cliente?
         """)
         
-        # Filtrar datos válidos
-        riesgo_df = joined_df[
-            (joined_df['Ultima_Revision'].notna()) & 
-            (joined_df['Ticket_Soporte_Abierto_Limpio'].notna()) &
-            (joined_df['Bodega_Origen'].notna())
-        ].copy()
+        # Filtrar datos válidos - Verificar primero si existen las columnas
+        columnas_necesarias = ['Ultima_Revision', 'Ticket_Soporte_Abierto_Limpio', 'Bodega_Origen']
+        columnas_presentes = [col for col in columnas_necesarias if col in joined_df.columns]
+        
+        if len(columnas_presentes) == len(columnas_necesarias):
+            riesgo_df = joined_df[
+                (joined_df['Ultima_Revision'].notna()) & 
+                (joined_df['Ticket_Soporte_Abierto_Limpio'].notna()) &
+                (joined_df['Bodega_Origen'].notna())
+            ].copy()
+        else:
+            columnas_faltantes = [col for col in columnas_necesarias if col not in joined_df.columns]
+            st.error(f"🚫 Columnas faltantes en joined_df: {', '.join(columnas_faltantes)}")
+            st.info(f"📊 Columnas disponibles: {', '.join(joined_df.columns.tolist())}")
+            riesgo_df = pd.DataFrame()  # DataFrame vacío para que el else maneje el error
         
         if len(riesgo_df) > 0:
             # Calcular días desde última revisión si no existe
