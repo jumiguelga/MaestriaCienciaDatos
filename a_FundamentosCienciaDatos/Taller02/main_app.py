@@ -485,6 +485,46 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
             # Si no existe la columna 'Edad', informamos (podría ser opcional en el CSV)
             st.info("La columna 'Edad' no está presente en el dataset de Feedback para el análisis de outliers.")
 
+
+        # NUEVA SECCIÓN: Análisis Comparativo Tickets vs NPS
+        st.divider()
+        st.subheader("📊 Comparativo: Tickets Abiertos (Si vs No)")
+
+        if 'Ticket_Soporte_Abierto_Limpio' in joined_df.columns:
+            ticket_counts = joined_df['Ticket_Soporte_Abierto_Limpio'].value_counts().reset_index()
+            ticket_counts.columns = ['Ticket_Abierto', 'Cantidad']
+
+            # Gráfico de barras
+            fig_tickets = px.bar(
+                ticket_counts,
+                x='Ticket_Abierto',
+                y='Cantidad',
+                color='Ticket_Abierto',
+                text='Cantidad',
+                title='Cantidad de Registros: Tickets Abiertos = Si vs No',
+                labels={'Ticket_Abierto': 'Estado del Ticket', 'Cantidad': 'Número de Registros'},
+                color_discrete_map={'Si': '#E91E63', 'No': '#4CAF50'}
+            )
+            fig_tickets.update_traces(textposition='outside')
+            fig_tickets.update_layout(showlegend=False, height=450)
+            st.plotly_chart(fig_tickets, use_container_width=True)
+
+            # Métricas
+            col_m1, col_m2, col_m3 = st.columns(3)
+            cant_si = ticket_counts[ticket_counts['Ticket_Abierto'] == 'Si']['Cantidad'].values
+            cant_no = ticket_counts[ticket_counts['Ticket_Abierto'] == 'No']['Cantidad'].values
+            cant_si = cant_si[0] if len(cant_si) > 0 else 0
+            cant_no = cant_no[0] if len(cant_no) > 0 else 0
+            total = cant_si + cant_no
+
+            col_m1.metric("Tickets Abiertos = Si", f"{cant_si:,}")
+            col_m2.metric("Tickets Abiertos = No", f"{cant_no:,}")
+            col_m3.metric("% con Tickets", f"{(cant_si/total*100):.1f}%" if total > 0 else "0%")
+
+            st.dataframe(ticket_counts, use_container_width=True)
+        else:
+            st.info("ℹ️ Columna 'Ticket_Soporte_Abierto_Limpio' no encontrada.")
+
     with tab5:
         st.header("📊 Reporte de Calidad y Análisis de Negocio")
         
@@ -1007,45 +1047,6 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
             """)
         else:
             st.warning("⚠️ No hay datos suficientes para el análisis de riesgo operativo (requiere fechas de revisión y tickets).")
-        
-        # NUEVA SECCIÓN: Análisis Comparativo Tickets vs NPS
-        st.divider()
-        st.subheader("📊 Comparativo: Tickets Abiertos (Si vs No)")
-        
-        if 'Ticket_Soporte_Abierto_Limpio' in joined_df.columns:
-            ticket_counts = joined_df['Ticket_Soporte_Abierto_Limpio'].value_counts().reset_index()
-            ticket_counts.columns = ['Ticket_Abierto', 'Cantidad']
-            
-            # Gráfico de barras
-            fig_tickets = px.bar(
-                ticket_counts,
-                x='Ticket_Abierto',
-                y='Cantidad',
-                color='Ticket_Abierto',
-                text='Cantidad',
-                title='Cantidad de Registros: Tickets Abiertos = Si vs No',
-                labels={'Ticket_Abierto': 'Estado del Ticket', 'Cantidad': 'Número de Registros'},
-                color_discrete_map={'Si': '#E91E63', 'No': '#4CAF50'}
-            )
-            fig_tickets.update_traces(textposition='outside')
-            fig_tickets.update_layout(showlegend=False, height=450)
-            st.plotly_chart(fig_tickets, use_container_width=True)
-            
-            # Métricas
-            col_m1, col_m2, col_m3 = st.columns(3)
-            cant_si = ticket_counts[ticket_counts['Ticket_Abierto'] == 'Si']['Cantidad'].values
-            cant_no = ticket_counts[ticket_counts['Ticket_Abierto'] == 'No']['Cantidad'].values
-            cant_si = cant_si[0] if len(cant_si) > 0 else 0
-            cant_no = cant_no[0] if len(cant_no) > 0 else 0
-            total = cant_si + cant_no
-            
-            col_m1.metric("Tickets Abiertos = Si", f"{cant_si:,}")
-            col_m2.metric("Tickets Abiertos = No", f"{cant_no:,}")
-            col_m3.metric("% con Tickets", f"{(cant_si/total*100):.1f}%" if total > 0 else "0%")
-            
-            st.dataframe(ticket_counts, use_container_width=True)
-        else:
-            st.info("ℹ️ Columna 'Ticket_Soporte_Abierto_Limpio' no encontrada.")
 
 else:
     st.info("Por favor, carga los tres archivos CSV en el panel lateral para comenzar.")
