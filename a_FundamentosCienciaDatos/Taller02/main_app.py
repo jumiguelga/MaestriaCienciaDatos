@@ -379,7 +379,7 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
                 
                 # Cantidad de respuestas
                 ax_detail.text(i, 2.2, f"{nps_scores[i]}", fontsize=12, ha='center', fontweight='bold',
-                               bbox=dict(facecolor='#333', edgecolor='none', boxstyle='round,pad=0.3', fontcolor='white'),
+                               bbox=dict(facecolor='#333', edgecolor='none', boxstyle='round,pad=0.3'),
                                color='white')
                 
                 # Círculo con el número de puntuación
