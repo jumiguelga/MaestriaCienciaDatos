@@ -43,6 +43,27 @@ def outlier_flag_iqr(df: pd.DataFrame, col: str, k: float = 1.5) -> pd.Series:
     low, high = iqr_bounds(base, k)
     return s.notna() & ((s < low) | (s > high))
 
+def detectar_outliers_multicolumna(df: pd.DataFrame, k: float = 1.5) -> pd.DataFrame:
+    """
+    Detecta outliers en todas las columnas numéricas.
+    Añade una columna 'Es_Outlier' que es True si alguna columna es outlier.
+    """
+    df = df.copy()
+    num_cols = df.select_dtypes(include=[np.number]).columns
+    # Evitar columnas que ya son flags o IDs si es posible, pero por ahora todas las numéricas
+    outlier_mask = pd.Series(False, index=df.index)
+    
+    for col in num_cols:
+        # Ignorar columnas de tipo ID o flags conocidas si se desea, 
+        # pero el requerimiento pide "todas las columnas numéricas"
+        if col.lower().endswith('_id') or col.startswith('flag_') or col.startswith('outlier_'):
+            continue
+        mask = outlier_flag_iqr(df, col, k)
+        outlier_mask = outlier_mask | mask
+        
+    df["Es_Outlier"] = outlier_mask
+    return df
+
 # -------------------------------------------------------------------
 # LIMPIEZA ESTÁNDAR: INVENTARIO
 # -------------------------------------------------------------------
@@ -547,13 +568,15 @@ def aplicar_exclusion_global(
     fb_c = fb_df.copy()
 
     if exclude_outliers:
-        if "outlier_costo" in inv_c.columns:
-            inv_c = inv_c[inv_c["outlier_costo"] == False]
-        if "outlier_precio" in tx_c.columns:
-            tx_c = tx_c[tx_c["outlier_precio"] == False]
-        if "Edad_Cliente" in fb_c.columns:
-            age_outliers = outlier_flag_iqr(fb_c, "Edad_Cliente")
-            fb_c = fb_c[~age_outliers]
+        # Detectar outliers en todas las columnas numéricas para cada dataset
+        inv_c = detectar_outliers_multicolumna(inv_c)
+        inv_c = inv_c[inv_c["Es_Outlier"] == False].drop(columns=["Es_Outlier"])
+        
+        tx_c = detectar_outliers_multicolumna(tx_c)
+        tx_c = tx_c[tx_c["Es_Outlier"] == False].drop(columns=["Es_Outlier"])
+        
+        fb_c = detectar_outliers_multicolumna(fb_c)
+        fb_c = fb_c[fb_c["Es_Outlier"] == False].drop(columns=["Es_Outlier"])
 
     if exclude_nulls:
         inv_c = inv_c.dropna()

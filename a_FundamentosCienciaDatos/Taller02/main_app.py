@@ -21,6 +21,9 @@ if 'logs' not in st.session_state:
 if 'fb_clean_adjusted' not in st.session_state:
     st.session_state.fb_clean_adjusted = None
 
+if 'age_outliers_log' not in st.session_state:
+    st.session_state.age_outliers_log = pd.DataFrame()
+
 def add_log(action):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     st.session_state.logs.append({"timestamp": timestamp, "action": action})
@@ -84,6 +87,9 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
     tx_raw = pd.read_csv(uploaded_tx)
     fb_raw = pd.read_csv(uploaded_fb)
     
+    # Pre-detección de outliers para UI y lógica (opcional si se quiere ver antes de excluir)
+    # Por ahora la exclusión global se encarga.
+
     # 1. Proceso de Limpieza Estándar
     inv_clean, inv_report = feda.sanitize_inventario(inv_raw)
     fb_clean = feda.limpiar_feedback_basico(fb_raw)
@@ -343,7 +349,46 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
                 st.pyplot(fig)
         
             st.subheader("Detalle de Grupos NPS")
-            st.bar_chart(fb_clean['Satisfaccion_NPS_Grupo'].value_counts())
+            
+            # Preparar datos para el gráfico de barras horizontales
+            nps_counts = fb_clean['Satisfaccion_NPS_Grupo'].value_counts()
+            
+            # Definir el orden deseado y los colores/iconos
+            nps_order = [
+                ("muy_insatisfecho", "😠 Muy insatisfecho", "red"),
+                ("neutro_o_ligeramente_satisfecho", "😐 Neutro o ligeramente insatisfecho", "skyblue"),
+                ("satisfecho", "🙂 Satisfecho", "yellow"),
+                ("muy_satisfecho", "😁 Muy satisfecho", "green")
+            ]
+            
+            # Filtrar solo los que existen en los datos
+            labels = []
+            values = []
+            colors_list = []
+            
+            for key, label, color in nps_order:
+                if key in nps_counts.index:
+                    labels.append(label)
+                    values.append(nps_counts[key])
+                    colors_list.append(color)
+            
+            # Crear gráfico con matplotlib
+            fig_nps, ax_nps = plt.subplots(figsize=(8, 4))
+            bars = ax_nps.barh(labels, values, color=colors_list, edgecolor='black')
+            ax_nps.set_xlabel('Cantidad de Respuestas')
+            ax_nps.set_title('Distribución de Grupos NPS')
+            
+            # Invertir el eje Y para que "Muy insatisfecho" esté arriba si se desea, 
+            # pero el requerimiento dice: 1ro muy insatisfecho, 2do neutro... 
+            # En barh el primero de la lista suele ir abajo, así que invertimos.
+            ax_nps.invert_yaxis() 
+            
+            # Añadir etiquetas de valor a las barras
+            for bar in bars:
+                width = bar.get_width()
+                ax_nps.text(width + 0.3, bar.get_y() + bar.get_height()/2, f'{int(width)}', va='center')
+
+            st.pyplot(fig_nps)
         else:
             st.warning("No se encontró información de NPS procesada.")
 
@@ -356,6 +401,10 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
                 outliers_mask = fb_clean['Edad_Cliente'] > 100
                 num_outliers = outliers_mask.sum()
                 if num_outliers > 0:
+                    # Guardar los datos outliers antes de imputar para el log
+                    current_outliers = fb_clean[outliers_mask].copy()
+                    st.session_state.age_outliers_log = pd.concat([st.session_state.age_outliers_log, current_outliers]).drop_duplicates()
+                    
                     fb_clean.loc[outliers_mask, 'Edad_Cliente'] = median_age
                     st.session_state.fb_clean_adjusted = fb_clean.copy()
                     add_log(f"Se ajustaron {num_outliers} outliers de edad a la mediana ({median_age}).")
@@ -364,6 +413,12 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
                     st.rerun()
                 else:
                     st.info("No se encontraron outliers (> 100 años) para ajustar.")
+
+            # Mostrar log de cambios de edad si existe
+            if not st.session_state.age_outliers_log.empty:
+                with st.expander("Ver log de outliers de edad procesados"):
+                    st.write("Registros que superaban los 100 años y fueron ajustados:")
+                    st.dataframe(st.session_state.age_outliers_log)
 
             age_outliers = feda.outlier_flag_iqr(fb_clean, 'Edad_Cliente')
             outlier_df = fb_clean[age_outliers]
