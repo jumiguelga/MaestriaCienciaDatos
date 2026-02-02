@@ -341,6 +341,21 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
 
         if 'Edad_Cliente' in fb_clean.columns:
             st.subheader("Análisis de Outliers en Edad")
+            
+            # Función para ajustar outliers de edad
+            if st.button("Ajustar Outliers de Edad a la Mediana"):
+                median_age = fb_clean[fb_clean['Edad_Cliente'] <= 100]['Edad_Cliente'].median()
+                outliers_mask = fb_clean['Edad_Cliente'] > 100
+                num_outliers = outliers_mask.sum()
+                if num_outliers > 0:
+                    fb_clean.loc[outliers_mask, 'Edad_Cliente'] = median_age
+                    add_log(f"Se ajustaron {num_outliers} outliers de edad a la mediana ({median_age}).")
+                    st.success(f"Se han ajustado {num_outliers} registros.")
+                    # Forzamos recarga para ver cambios en gráficas
+                    st.rerun()
+                else:
+                    st.info("No se encontraron outliers (> 100 años) para ajustar.")
+
             age_outliers = feda.outlier_flag_iqr(fb_clean, 'Edad_Cliente')
             outlier_df = fb_clean[age_outliers]
             
