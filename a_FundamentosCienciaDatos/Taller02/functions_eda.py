@@ -55,10 +55,13 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
     df = dataframe.copy()
     report = {}
 
-    # 1. Remover espacios en blanco y normalizar texto
+# 1. Remover espacios en blanco y normalizar texto
     cat_cols = df.select_dtypes(include=["object", "string"]).columns
     affected_norm = 0
+    id_cols = ["SKU_ID", "Transaccion_ID", "Feedback_ID"]
     for col in cat_cols:
+        if col in id_cols:
+            continue
         original = df[col].copy()
         df[col] = df[col].apply(normalize_text)
         affected_norm += (df[col] != original).sum()
@@ -150,7 +153,7 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
 # LIMPIEZA ESTÁNDAR: TRANSACCIONES
 # -------------------------------------------------------------------
 
-def sanitize_transacciones(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def sanitize_transacciones(dataframe: pd.DataFrame, normalize_status: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Sanea el DataFrame de transacciones y devuelve:
     (DataFrame saneado, DataFrame resumen de filas afectadas por cada proceso).
@@ -160,7 +163,10 @@ def sanitize_transacciones(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.Da
 
     # 0. Normalización de texto básica
     cat_cols = df.select_dtypes(include=["object", "string"]).columns
+    id_cols = ["SKU_ID", "Transaccion_ID", "Feedback_ID"]
     for col in cat_cols:
+        if col in id_cols:
+            continue
         df[col] = df[col].apply(normalize_text)
 
     # 1. Conversión de fechas en 'Fecha_Venta'
@@ -212,17 +218,20 @@ def sanitize_transacciones(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.Da
 
     # 5. Normalización de Estado_Envio
     if "Estado_Envio" in df.columns:
-        before_status = (
-            df["Estado_Envio"].notnull()
-            & df["Estado_Envio"].isin(dicts.mapping_estado_envio.keys())
-        ).sum()
-        df["Estado_Envio"] = (
-            df["Estado_Envio"]
-            .astype("string")
-            .str.strip()
-            .replace(dicts.mapping_estado_envio)
-        )
-        report["Normalización de Estado_Envio"] = int(before_status)
+        if normalize_status:
+            before_status = (
+                df["Estado_Envio"].notnull()
+                & df["Estado_Envio"].isin(dicts.mapping_estado_envio.keys())
+            ).sum()
+            df["Estado_Envio"] = (
+                df["Estado_Envio"]
+                .astype("string")
+                .str.strip()
+                .replace(dicts.mapping_estado_envio)
+            )
+            report["Normalización de Estado_Envio"] = int(before_status)
+        else:
+            report["Normalización de Estado_Envio"] = 0
 
     # 6. Detección de outliers (IQR)
     if "Precio_Venta_Final" in df.columns:

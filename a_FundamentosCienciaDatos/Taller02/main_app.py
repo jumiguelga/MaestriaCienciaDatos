@@ -83,7 +83,6 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
     
     # 1. Proceso de Limpieza Estándar
     inv_clean, inv_report = feda.sanitize_inventario(inv_raw)
-    tx_clean, tx_report = feda.sanitize_transacciones(tx_raw)
     fb_clean = feda.limpiar_feedback_basico(fb_raw)
     
     # Logging inicial
@@ -91,8 +90,15 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         add_log("Carga de archivos y limpieza inicial ejecutada.")
         st.session_state.initial_clean = True
 
+    future_date_mode = st.sidebar.radio("Ventas Futuras", ["Mantener", "Corregir (Año -1)", "Excluir"])
+    normalize_status = st.sidebar.checkbox("Normalizar Estado_Envio", value=False)
+    
+    # Aplicar limpieza estándar de transacciones
+    tx_clean, tx_report = feda.sanitize_transacciones(tx_raw, normalize_status=normalize_status)
+    
     # 2. Procesos de Limpieza Opcionales (Transacciones)
     st.sidebar.subheader("Limpieza Opcional Transacciones")
+    
     impute_knn = st.sidebar.checkbox("Imputar Costo Envío (KNN)", value=False)
     if impute_knn:
         tx_clean = feda.imputar_costo_envio_knn(tx_clean)
@@ -103,13 +109,22 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         tx_clean = feda.excluir_ventas_cantidad_negativa(tx_clean)
         add_log("Cantidades negativas excluidas.")
         
-    future_date_mode = st.sidebar.radio("Ventas Futuras", ["Mantener", "Corregir (Año -1)", "Excluir"])
     if future_date_mode == "Corregir (Año -1)":
         tx_clean = feda.corregir_o_excluir_ventas_futuras(tx_clean, modo="corregir")
         add_log("Fechas futuras corregidas.")
+        # Actualizamos el reporte para reflejar la acción opcional
+        future_mask = pd.to_datetime(tx_raw["Fecha_Venta"], format="%d/%m/%Y", errors="coerce") > pd.Timestamp(datetime.today().date())
+        tx_report.loc[tx_report["Proceso"] == "Fechas futuras corregidas (año -1)", "Filas_afectadas"] = int(future_mask.sum())
     elif future_date_mode == "Excluir":
         tx_clean = feda.corregir_o_excluir_ventas_futuras(tx_clean, modo="excluir")
         add_log("Fechas futuras excluidas.")
+        # Podríamos añadir una fila al reporte o reutilizar la existente
+        future_mask = pd.to_datetime(tx_raw["Fecha_Venta"], format="%d/%m/%Y", errors="coerce") > pd.Timestamp(datetime.today().date())
+        tx_report.loc[tx_report["Proceso"] == "Fechas futuras corregidas (año -1)", "Proceso"] = "Fechas futuras excluidas"
+        tx_report.loc[tx_report["Proceso"] == "Fechas futuras excluidas", "Filas_afectadas"] = int(future_mask.sum())
+    elif future_date_mode == "Mantener":
+        # Si se elige mantener, ponemos a 0 en el reporte lo que hizo sanitize_transacciones por defecto
+        tx_report.loc[tx_report["Proceso"] == "Fechas futuras corregidas (año -1)", "Filas_afectadas"] = 0
         
     include_ghost_skus = st.sidebar.checkbox("Incluir SKUs inexistentes en Inventario", value=True)
     tx_clean = feda.filtrar_skus_fantasma(tx_clean, inv_clean, incluir_fantasma=include_ghost_skus)
@@ -160,13 +175,13 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         
         with viz_col1:
             st.write("**Distribución de Ingresos**")
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(figsize=(5, 3))
             sns.histplot(joined_df['Ingreso'], kde=True, ax=ax)
             st.pyplot(fig)
             
         with viz_col2:
             st.write("**Outliers en Costo Unitario (Inventario)**")
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(figsize=(5, 3))
             sns.boxplot(x=inv_clean['Costo_Unitario_USD'], ax=ax)
             st.pyplot(fig)
 
@@ -187,6 +202,23 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
 
     with tab3:
         st.header("Análisis de Salud: Transacciones")
+        
+        # Gráfico de cantidades negativas
+        neg_qty_df = tx_raw[tx_raw['Cantidad_Vendida'] < 0]
+        if not neg_qty_df.empty:
+            st.subheader("Análisis de Cantidades Negativas")
+            col_v1, col_v2 = st.columns(2)
+            with col_v1:
+                st.write(f"Total de registros con cantidad negativa: {len(neg_qty_df)}")
+                st.dataframe(neg_qty_df[['Transaccion_ID', 'SKU_ID', 'Cantidad_Vendida']].head(10))
+            with col_v2:
+                fig, ax = plt.subplots(figsize=(5, 3))
+                sns.histplot(neg_qty_df['Cantidad_Vendida'], ax=ax, bins=20, color='red')
+                ax.set_title("Distribución de Cantidades Negativas")
+                st.pyplot(fig)
+        else:
+            st.success("No se encontraron cantidades negativas en los datos originales.")
+
         h_score, nulls, cleaned = compute_health_score(tx_raw, tx_clean)
         
         c1, c2, c3 = st.columns(3)
