@@ -226,11 +226,22 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         c2.metric("Nulos Totales (Raw)", nulls)
         c3.metric("Filas Removidas/Filtradas", cleaned)
         
+        # ghost SKU metrics
         st.subheader("Productos en Transacciones no existentes en Inventario")
         ghost_skus = tx_clean[tx_clean['flag_sku_fantasma'] == True]
-        st.write(f"Total de registros con SKUs faltantes: {len(ghost_skus)}")
+        
+        total_sales = (tx_clean['Cantidad_Vendida'] * tx_clean['Precio_Venta_Final']).sum()
+        ghost_sales = (ghost_skus['Cantidad_Vendida'] * ghost_skus['Precio_Venta_Final']).sum()
+        ghost_pct = (ghost_sales / total_sales * 100) if total_sales > 0 else 0
+        
+        gc1, gc2, gc3 = st.columns(3)
+        gc1.metric("SKUs Únicos Faltantes", ghost_skus['SKU_ID'].nunique())
+        gc2.metric("Transacciones Afectadas", len(ghost_skus))
+        gc3.metric("Ventas Perdidas/Fantasma (USD)", f"${ghost_sales:,.2f}")
+        st.write(f"Esto representa el **{ghost_pct:.2f}%** del total de ventas procesadas.")
+
         if not ghost_skus.empty:
-            st.dataframe(ghost_skus[['SKU_ID', 'Transaccion_ID']].drop_duplicates().head(10))
+            st.dataframe(ghost_skus[['SKU_ID', 'Transaccion_ID', 'Cantidad_Vendida', 'Precio_Venta_Final']].head(10))
 
         st.subheader("Reporte de Procesos de Limpieza")
         st.table(tx_report)
@@ -247,22 +258,45 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         if 'Satisfaccion_NPS_Grupo' in fb_clean.columns:
             st.subheader("Distribución de NPS")
         
-            # Ajusta el tamaño de la figura (ancho, alto) en pulgadas
-            fig, ax = plt.subplots(figsize=(6, 6))  # Más pequeño que el default (8, 6)
-        
-            fb_clean['Satisfaccion_NPS_Grupo'].value_counts().plot(
-                kind='pie',
-                autopct='%1.1f%%',
-                ax=ax
-            )
-            ax.set_ylabel('')
-            st.pyplot(fig)
+            # Usamos columnas para centrar y reducir el tamaño visual del gráfico
+            ec1, ec2, ec3 = st.columns([1, 1, 1])
+            with ec2:
+                fig, ax = plt.subplots(figsize=(3, 3))  # Tamaño más pequeño
+                fb_clean['Satisfaccion_NPS_Grupo'].value_counts().plot(
+                    kind='pie',
+                    autopct='%1.1f%%',
+                    ax=ax,
+                    textprops={'fontsize': 7} # Texto más pequeño para que quepa
+                )
+                ax.set_ylabel('')
+                st.pyplot(fig)
         
             st.subheader("Detalle de Grupos NPS")
             st.bar_chart(fb_clean['Satisfaccion_NPS_Grupo'].value_counts())
         else:
             st.warning("No se encontró información de NPS procesada.")
 
+        if 'Edad' in fb_clean.columns:
+            st.subheader("Análisis de Outliers en Edad")
+            age_outliers = feda.outlier_flag_iqr(fb_clean, 'Edad')
+            outlier_df = fb_clean[age_outliers]
+            
+            if not outlier_df.empty:
+                st.warning(f"Se detectaron {len(outlier_df)} registros con edades fuera de rango.")
+                col_age1, col_age2 = st.columns(2)
+                with col_age1:
+                    st.write("Muestra de Outliers:")
+                    st.dataframe(outlier_df[['Feedback_ID', 'Edad', 'Satisfaccion_NPS']].head(10))
+                with col_age2:
+                    fig, ax = plt.subplots(figsize=(5, 3))
+                    sns.boxplot(x=fb_clean['Edad'], ax=ax, color='orange')
+                    ax.set_title("Boxplot de Edad (Feedback)")
+                    st.pyplot(fig)
+            else:
+                st.success("No se detectaron outliers significativos en la edad de los encuestados.")
+        else:
+            # Si no existe la columna 'Edad', informamos (podría ser opcional en el CSV)
+            st.info("La columna 'Edad' no está presente en el dataset de Feedback para el análisis de outliers.")
 
 else:
     st.info("Por favor, carga los tres archivos CSV en el panel lateral para comenzar.")
