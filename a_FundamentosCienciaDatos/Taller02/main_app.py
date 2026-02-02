@@ -18,6 +18,13 @@ from reportlab.lib import colors
 # Configuración de la página
 st.set_page_config(page_title="Data Quality & EDA Dashboard", layout="wide")
 
+# OpenAI for Agent (optional)
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
 # --- ESTADO DE LA SESIÓN ---
 if 'logs' not in st.session_state:
     st.session_state.logs = []
@@ -30,6 +37,12 @@ if 'age_outliers_log' not in st.session_state:
 
 if 'user_comments' not in st.session_state:
     st.session_state.user_comments = ""
+
+if 'chat_messages' not in st.session_state:
+    st.session_state.chat_messages = []
+
+if 'api_key' not in st.session_state:
+    st.session_state.api_key = ""
 
 def add_log(action):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -95,6 +108,23 @@ st.sidebar.title("Configuración")
 uploaded_inv = st.sidebar.file_uploader("Cargar Inventario (CSV)", type=["csv"])
 uploaded_tx = st.sidebar.file_uploader("Cargar Transacciones (CSV)", type=["csv"])
 uploaded_fb = st.sidebar.file_uploader("Cargar Feedback (CSV)", type=["csv"])
+
+# API Key for AI Agent
+st.sidebar.subheader("🤖 Agente de Análisis (Opcional)")
+with st.sidebar.expander("Configurar API Key"):
+    api_key_input = st.text_input(
+        "API Key (OpenAI)",
+        value=st.session_state.api_key,
+        type="password",
+        placeholder="sk-...",
+        help="Ingrese su API Key de OpenAI para habilitar el chat con el agente."
+    )
+    if api_key_input:
+        st.session_state.api_key = api_key_input
+    if st.session_state.api_key:
+        st.success("✅ API Key configurada")
+    else:
+        st.info("Configure una API Key para usar el chat con el agente.")
 
 # Opciones de limpieza global
 st.sidebar.subheader("Opciones de Limpieza")
@@ -191,7 +221,10 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
     joined_df = feda.feature_engineering(joined_df)
 
     # --- TABS ---
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["EDA General", "Salud Inventario", "Salud Transacciones", "Salud NPS", "Reporte (Dashboard)"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "EDA General", "Salud Inventario", "Salud Transacciones", "Salud NPS",
+        "Reporte (Dashboard)", "🤖 Chat con Agente"
+    ])
 
     with tab1:
         st.header("Análisis Exploratorio de Datos (EDA) por Dataset")
@@ -1060,6 +1093,108 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
             """)
         else:
             st.warning("⚠️ No hay datos suficientes para el análisis de riesgo operativo (requiere fechas de revisión y tickets).")
+
+    # --- TAB 6: Chat con Agente ---
+    with tab6:
+        st.header("🤖 Chat con Agente de Análisis")
+
+        # Build agent context from all data
+        h_inv = compute_health_score(inv_raw, inv_clean)
+        h_tx = compute_health_score(tx_raw, tx_clean)
+        h_fb = compute_health_score(fb_raw, fb_clean)
+        health_scores = {
+            "Inventario": h_inv,
+            "Transacciones": h_tx,
+            "Feedback": h_fb,
+        }
+
+        nps_score_val = None
+        if 'Satisfaccion_NPS' in fb_clean.columns:
+            total_resp = len(fb_clean)
+            if total_resp > 0:
+                detractores = len(fb_clean[fb_clean['Satisfaccion_NPS'] <= 0])
+                pasivos = len(fb_clean[(fb_clean['Satisfaccion_NPS'] > 0) & (fb_clean['Satisfaccion_NPS'] < 50.1)])
+                promotores = len(fb_clean[fb_clean['Satisfaccion_NPS'] >= 50.1])
+                nps_score_val = (promotores / total_resp * 100) - (detractores / total_resp * 100)
+
+        ghost_skus_tab6 = tx_clean[tx_clean['flag_sku_fantasma'] == True]
+        total_sales_t = (tx_clean['Cantidad_Vendida'] * tx_clean['Precio_Venta_Final']).sum()
+        ghost_sales_t = (ghost_skus_tab6['Cantidad_Vendida'] * ghost_skus_tab6['Precio_Venta_Final']).sum()
+        ghost_pct_t = (ghost_sales_t / total_sales_t * 100) if total_sales_t > 0 else 0
+
+        margen_neg = joined_df[joined_df['Margen_Neto_aprox'] < 0]
+        margen_neg_cnt = len(margen_neg)
+        margen_neg_loss = margen_neg['Margen_Neto_aprox'].sum() if margen_neg_cnt > 0 else 0
+
+        agent_context = feda.build_agent_context(
+            inv_raw=inv_raw,
+            inv_clean=inv_clean,
+            inv_report=inv_report,
+            tx_raw=tx_raw,
+            tx_clean=tx_clean,
+            tx_report=tx_report,
+            fb_raw=fb_raw,
+            fb_clean=fb_clean,
+            joined_df=joined_df,
+            logs=st.session_state.logs,
+            user_comments=st.session_state.user_comments,
+            health_scores=health_scores,
+            nps_score=nps_score_val,
+            ghost_skus_count=ghost_skus_tab6['SKU_ID'].nunique() if not ghost_skus_tab6.empty else 0,
+            ghost_sales_pct=ghost_pct_t,
+            margen_negativo_count=margen_neg_cnt,
+            margen_negativo_loss=margen_neg_loss,
+        )
+
+        if not OPENAI_AVAILABLE:
+            st.error("⚠️ El paquete `openai` no está instalado. Ejecute: `pip install openai`")
+        elif not st.session_state.api_key:
+            st.info("Configure su API Key de OpenAI en el panel lateral (Configurar API Key) para habilitar el chat con el agente.")
+        else:
+            # System prompt with full context
+            SYSTEM_PROMPT = """Eres un asistente experto en análisis de datos, calidad de datos y business intelligence.
+Tienes acceso al contexto completo del análisis exploratorio de datos (EDA) y las métricas de calidad de un proyecto.
+El contexto incluye: resúmenes de inventario, transacciones, feedback, NPS, SKUs fantasma, márgenes negativos, logs de limpieza y comentarios del analista.
+Responde en español de forma clara y concisa. Da recomendaciones prácticas cuando sea apropiado.
+Si te preguntan algo fuera del contexto, indica amablemente que solo puedes responder sobre los datos cargados en el dashboard."""
+
+            # Display chat history
+            for msg in st.session_state.chat_messages:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
+
+            # Chat input
+            if prompt := st.chat_input("Escriba su pregunta sobre los datos..."):
+                st.session_state.chat_messages.append({"role": "user", "content": prompt})
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+
+                with st.chat_message("assistant"):
+                    with st.spinner("Pensando..."):
+                        try:
+                            client = OpenAI(api_key=st.session_state.api_key)
+                            messages = [
+                                {"role": "system", "content": SYSTEM_PROMPT + "\n\n--- CONTEXTO DEL DASHBOARD ---\n\n" + agent_context},
+                            ]
+                            for m in st.session_state.chat_messages:
+                                messages.append({"role": m["role"], "content": m["content"]})
+
+                            response = client.chat.completions.create(
+                                model="gpt-4o-mini",
+                                messages=messages,
+                                temperature=0.4,
+                            )
+                            reply = response.choices[0].message.content
+                            st.markdown(reply)
+                            st.session_state.chat_messages.append({"role": "assistant", "content": reply})
+                        except Exception as e:
+                            err_msg = f"Error al contactar la API: {str(e)}"
+                            st.error(err_msg)
+                            st.session_state.chat_messages.append({"role": "assistant", "content": err_msg})
+
+            if st.session_state.chat_messages and st.button("🗑️ Limpiar historial de chat"):
+                st.session_state.chat_messages = []
+                st.rerun()
 
 else:
     st.info("Por favor, carga los tres archivos CSV en el panel lateral para comenzar.")

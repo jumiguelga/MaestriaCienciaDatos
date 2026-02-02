@@ -567,6 +567,117 @@ def feature_engineering(joined: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# -------------------------------------------------------------------
+# AGENT CONTEXT: Build comprehensive summary for AI assistant
+# -------------------------------------------------------------------
+
+def build_agent_context(
+    inv_raw: Optional[pd.DataFrame],
+    inv_clean: pd.DataFrame,
+    inv_report: pd.DataFrame,
+    tx_raw: Optional[pd.DataFrame],
+    tx_clean: pd.DataFrame,
+    tx_report: pd.DataFrame,
+    fb_raw: Optional[pd.DataFrame],
+    fb_clean: pd.DataFrame,
+    joined_df: pd.DataFrame,
+    logs: List[Dict[str, str]],
+    user_comments: str = "",
+    health_scores: Optional[Dict[str, Tuple[float, int, int]]] = None,
+    nps_score: Optional[float] = None,
+    ghost_skus_count: int = 0,
+    ghost_sales_pct: float = 0,
+    margen_negativo_count: int = 0,
+    margen_negativo_loss: float = 0,
+) -> str:
+    """
+    Builds a comprehensive text context summarizing all EDA data and insights
+    for use by an AI agent to answer questions and provide recommendations.
+    """
+    lines = []
+
+    # 1. Dataset Overview
+    lines.append("=== RESUMEN DE DATOS ===\n")
+    for name, raw, clean, report in [
+        ("Inventario", inv_raw, inv_clean, inv_report),
+        ("Transacciones", tx_raw, tx_clean, tx_report),
+        ("Feedback", fb_raw, fb_clean, None),
+    ]:
+        raw_cnt = len(raw) if raw is not None and not raw.empty else 0
+        clean_cnt = len(clean) if clean is not None and not clean.empty else 0
+        lines.append(f"- {name}: {raw_cnt} registros originales -> {clean_cnt} tras limpieza")
+        if report is not None and not report.empty:
+            for _, row in report.iterrows():
+                lines.append(f"  · {row.get('Proceso', row[0])}: {row.get('Filas_afectadas', row[1])} filas afectadas")
+        lines.append("")
+
+    # 2. Columnas principales
+    lines.append("=== COLUMNAS PRINCIPALES ===\n")
+    for df, label in [(inv_clean, "Inventario"), (tx_clean, "Transacciones"), (fb_clean, "Feedback")]:
+        if df is not None and not df.empty:
+            cols = list(df.columns)
+            lines.append(f"{label}: {', '.join(cols[:15])}{'...' if len(cols) > 15 else ''}")
+    lines.append("")
+
+    # 3. Health Scores
+    if health_scores:
+        lines.append("=== MÉTRICAS DE CALIDAD (HEALTH SCORES) ===\n")
+        for ds, (score, nulls, cleaned) in health_scores.items():
+            lines.append(f"- {ds}: Health Score {score:.2f}%, Nulos raw: {nulls}, Filas removidas: {cleaned}")
+        lines.append("")
+
+    # 4. Estadísticas clave del join
+    if joined_df is not None and not joined_df.empty:
+        lines.append("=== DATASET UNIDO (Transacciones + Inventario + Feedback) ===\n")
+        lines.append(f"- Total de registros: {len(joined_df)}")
+        if "Ingreso" in joined_df.columns:
+            lines.append(f"- Ingreso total: ${joined_df['Ingreso'].sum():,.2f}")
+        if "Margen_Neto_aprox" in joined_df.columns:
+            lines.append(f"- Margen neto total aprox: ${joined_df['Margen_Neto_aprox'].sum():,.2f}")
+        lines.append("")
+
+    # 5. NPS
+    if nps_score is not None:
+        lines.append(f"=== NPS ===\n- Score NPS calculado: {nps_score:.1f}\n")
+
+    # 6. SKUs Fantasma
+    lines.append("=== SKUs FANTASMA ===\n")
+    lines.append(f"- SKUs únicos fantasma: {ghost_skus_count}")
+    lines.append(f"- % ventas fantasma del total: {ghost_sales_pct:.2f}%\n")
+
+    # 7. Margen Negativo
+    lines.append("=== FUGA DE CAPITAL (MARGEN NEGATIVO) ===\n")
+    lines.append(f"- Transacciones con margen negativo: {margen_negativo_count}")
+    lines.append(f"- Pérdida total acumulada: ${margen_negativo_loss:,.2f}\n")
+
+    # 8. Log de acciones
+    lines.append("=== LOG DE ACCIONES DE LIMPIEZA ===\n")
+    if logs:
+        for log in logs[-20:]:  # últimas 20 acciones
+            lines.append(f"- {log.get('timestamp', '')}: {log.get('action', '')}")
+    else:
+        lines.append("- No hay acciones registradas.")
+    lines.append("")
+
+    # 9. Comentarios del analista
+    if user_comments and user_comments.strip():
+        lines.append("=== COMENTARIOS DEL ANALISTA ===\n")
+        lines.append(user_comments.strip())
+        lines.append("")
+
+    # 10. Muestra de estadísticas descriptivas (solo resumen)
+    lines.append("=== ESTADÍSTICAS DESCRIPTIVAS (MUESTRA) ===\n")
+    for df, label in [(inv_clean, "Inventario"), (tx_clean, "Transacciones")]:
+        if df is not None and not df.empty:
+            num_cols = df.select_dtypes(include=[np.number]).columns
+            if len(num_cols) > 0:
+                desc = df[num_cols].describe().round(2)
+                lines.append(f"{label} (numéricas): {desc.to_string()[:500]}...")
+                lines.append("")
+
+    return "\n".join(lines)
+
+
 def aplicar_exclusion_global(
         inv_df: pd.DataFrame,
         tx_df: pd.DataFrame,
