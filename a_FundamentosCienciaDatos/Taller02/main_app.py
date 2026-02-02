@@ -341,8 +341,8 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
             total_respuestas = len(fb_clean)
             
             detractores = fb_clean[fb_clean['Satisfaccion_NPS'] <= 0]
-            pasivos = fb_clean[(fb_clean['Satisfaccion_NPS'] >= 50) & (fb_clean['Satisfaccion_NPS'] <= 8)]
-            promotores = fb_clean[fb_clean['Satisfaccion_NPS'] >= 50]
+            pasivos = fb_clean[(fb_clean['Satisfaccion_NPS'] >= 0.1) & (fb_clean['Satisfaccion_NPS'] <= 50)]
+            promotores = fb_clean[fb_clean['Satisfaccion_NPS'] >= 50.1]
             
             count_det = len(detractores)
             count_pas = len(pasivos)
