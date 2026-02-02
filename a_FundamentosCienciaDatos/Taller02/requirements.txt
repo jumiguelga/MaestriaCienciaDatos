@@ -4,6 +4,7 @@ numpy
 scikit-learn
 matplotlib
 seaborn
+plotly
 scipy
 altair
 vl-convert-python

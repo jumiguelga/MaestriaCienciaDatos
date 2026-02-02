@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
 import functions_eda as feda
 import dictionaries as dicts
 from datetime import datetime
@@ -332,11 +334,21 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         ghost_sales = (ghost_skus['Cantidad_Vendida'] * ghost_skus['Precio_Venta_Final']).sum()
         ghost_pct = (ghost_sales / total_sales * 100) if total_sales > 0 else 0
         
-        gc1, gc2, gc3 = st.columns(3)
+        gc1, gc2, gc3, gc4 = st.columns(4)
         gc1.metric("SKUs Únicos Faltantes", ghost_skus['SKU_ID'].nunique())
         gc2.metric("Transacciones Afectadas", len(ghost_skus))
-        gc3.metric("Ventas Perdidas/Fantasma (USD)", f"${ghost_sales:,.2f}")
-        st.write(f"Esto representa el **{ghost_pct:.2f}%** del total de ventas procesadas.")
+        gc3.metric("Ventas Fantasma (USD)", f"${ghost_sales:,.2f}")
+        gc4.metric("% del Total de Ventas", f"{ghost_pct:.2f}%", 
+                   delta=None, 
+                   delta_color="inverse")
+        
+        # Interpretación contextual
+        if ghost_pct > 10:
+            st.error(f"⚠️ Las ventas fantasma representan más del 10% del total. **Acción crítica requerida.**")
+        elif ghost_pct > 5:
+            st.warning(f"⚠️ Las ventas fantasma superan el 5%. Se recomienda revisión urgente del catálogo.")
+        else:
+            st.info(f"✅ Las ventas fantasma están bajo control ({ghost_pct:.2f}%).")
 
         if not ghost_skus.empty:
             st.dataframe(ghost_skus[['SKU_ID', 'Transaccion_ID', 'Cantidad_Vendida', 'Precio_Venta_Final']].head(10))
@@ -672,8 +684,130 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
 
         st.divider()
         
-        # SECCIÓN 5: Crisis Logística y Correlación NPS
-        st.subheader("5️⃣ Crisis Logística: Correlación Tiempo de Entrega vs NPS")
+        # SECCIÓN 5: Diagnóstico de Fidelidad (Stock Alto vs NPS Bajo)
+        st.subheader("5️⃣ Diagnóstico de Fidelidad: Paradoja Stock Alto + NPS Bajo")
+        
+        # Filtrar datos válidos
+        fidelidad_df = joined_df[
+            (joined_df['Stock_Actual'].notna()) & 
+            (joined_df['Stock_Actual'] > 0) &
+            (joined_df['Satisfaccion_NPS'].notna()) &
+            (joined_df['Satisfaccion_NPS_Grupo'].notna())
+        ].copy()
+        
+        if len(fidelidad_df) > 0:
+            # Agregar por SKU
+            fidelidad_agg = fidelidad_df.groupby('SKU_ID').agg({
+                'Stock_Actual': 'mean',
+                'Satisfaccion_NPS': 'mean',
+                'Satisfaccion_NPS_Grupo': lambda x: x.mode()[0] if len(x) > 0 else 'desconocido',
+                'Categoria': 'first',
+                'Precio_Venta_Final': 'mean',
+                'Transaccion_ID': 'count'
+            }).reset_index()
+            fidelidad_agg.columns = ['SKU_ID', 'Stock_Promedio', 'NPS_Promedio', 'NPS_Grupo', 'Categoria', 'Precio_Promedio', 'Num_Ventas']
+            
+            # Identificar paradoja
+            stock_percentil_75 = fidelidad_agg['Stock_Promedio'].quantile(0.75)
+            nps_bajo = fidelidad_agg['NPS_Promedio'] < 50
+            
+            paradoja_df = fidelidad_agg[
+                (fidelidad_agg['Stock_Promedio'] >= stock_percentil_75) & 
+                (nps_bajo)
+            ].copy()
+            
+            # Mapa de colores por grupo NPS
+            color_map = {
+                'muy_insatisfecho': '#E91E63',
+                'neutro_o_ligeramente_satisfecho': '#FFC107',
+                'satisfecho': '#8BC34A',
+                'muy_satisfecho': '#4CAF50'
+            }
+            
+            # Scatter plot
+            fig_fidelidad = px.scatter(
+                fidelidad_agg,
+                x='Stock_Promedio',
+                y='NPS_Promedio',
+                color='NPS_Grupo',
+                size='Num_Ventas',
+                hover_data=['SKU_ID', 'Categoria', 'Precio_Promedio', 'Num_Ventas'],
+                color_discrete_map=color_map,
+                title='Relación entre Stock Disponible y Satisfacción del Cliente (NPS)',
+                labels={
+                    'Stock_Promedio': 'Stock Promedio (unidades)',
+                    'NPS_Promedio': 'Satisfacción NPS Promedio',
+                    'NPS_Grupo': 'Grupo NPS',
+                    'Num_Ventas': 'Volumen de Ventas'
+                },
+                size_max=20
+            )
+            
+            # Líneas de referencia
+            fig_fidelidad.add_hline(y=50, line_dash="dash", line_color="gray",
+                                   annotation_text="Umbral NPS Aceptable (50)", 
+                                   annotation_position="right")
+            fig_fidelidad.add_vline(x=stock_percentil_75, line_dash="dash", line_color="blue",
+                                   annotation_text=f"P75 Stock ({stock_percentil_75:.0f})",
+                                   annotation_position="top")
+            
+            # Zona problemática
+            fig_fidelidad.add_shape(
+                type="rect",
+                x0=stock_percentil_75, x1=fidelidad_agg['Stock_Promedio'].max() * 1.1,
+                y0=0, y1=50,
+                fillcolor="red", opacity=0.1, line_width=0
+            )
+            
+            fig_fidelidad.update_layout(height=500)
+            st.plotly_chart(fig_fidelidad, use_container_width=True)
+            
+            # Análisis de productos paradójicos
+            st.write("**⚠️ Productos Paradójicos: Alto Stock + Baja Satisfacción**")
+            
+            if len(paradoja_df) > 0:
+                st.write(f"Se encontraron **{len(paradoja_df)} productos** con alta disponibilidad pero baja satisfacción:")
+                
+                paradoja_display = paradoja_df[['SKU_ID', 'Categoria', 'Stock_Promedio', 'NPS_Promedio', 'Precio_Promedio', 'Num_Ventas']].sort_values('NPS_Promedio')
+                st.dataframe(paradoja_display.head(10), use_container_width=True)
+                
+                # Análisis por categoría
+                st.write("**Distribución por Categoría:**")
+                cat_counts = paradoja_df['Categoria'].value_counts()
+                fig_cat = px.bar(
+                    x=cat_counts.index,
+                    y=cat_counts.values,
+                    labels={'x': 'Categoría', 'y': 'Cantidad de SKUs'},
+                    title='Categorías más afectadas por la paradoja',
+                    color=cat_counts.values,
+                    color_continuous_scale='Reds'
+                )
+                st.plotly_chart(fig_cat, use_container_width=True)
+                
+                # Interpretación
+                st.markdown("""
+                ### 🧐 Posibles Causas:
+                
+                1. **Problema de Calidad**: Los productos tienen defectos o no cumplen expectativas
+                2. **Sobrecosto**: El precio es alto comparado con el valor percibido
+                3. **Descatalogación inminente**: Stock alto por falta de demanda (círculo vicioso)
+                4. **Problema logístico**: Entregas deficientes afectan la percepción del producto
+                
+                ### 💡 Recomendaciones:
+                - Revisar reviews/comentarios de estos productos específicos
+                - Comparar precios con competencia
+                - Evaluar promociones o descuentos para reducir inventario
+                - Considerar mejora de calidad o retiro del catálogo
+                """)
+            else:
+                st.success("✅ No se detectaron productos con la paradoja de alto stock y baja satisfacción.")
+        else:
+            st.warning("⚠️ No hay datos suficientes para el análisis de fidelidad (requiere stock y NPS).")
+        
+        st.divider()
+        
+        # SECCIÓN 6: Crisis Logística y Correlación NPS
+        st.subheader("6️⃣ Crisis Logística: Correlación Tiempo de Entrega vs NPS")
         
         # Filtrar datos válidos
         analisis_log = joined_df[
@@ -720,6 +854,159 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
                 st.dataframe(resultado_log, use_container_width=True)
         else:
             st.info("No hay suficientes datos cruzados (Entrega + NPS) para realizar el análisis de correlación.")
+        
+        st.divider()
+        
+        # SECCIÓN 7: Riesgo Operativo (Antigüedad Revisión vs Tickets)
+        st.subheader("7️⃣ Riesgo Operativo: Antigüedad de Revisión vs Tickets de Soporte")
+        
+        st.markdown("""
+        **Pregunta clave:** ¿Qué bodegas están operando "a ciegas" (sin revisar su inventario) 
+        y cómo impacta esto en la satisfacción del cliente?
+        """)
+        
+        # Filtrar datos válidos
+        riesgo_df = joined_df[
+            (joined_df['Ultima_Revision'].notna()) & 
+            (joined_df['Ticket_Soporte_Abierto_Limpio'].notna()) &
+            (joined_df['Bodega_Origen'].notna())
+        ].copy()
+        
+        if len(riesgo_df) > 0:
+            # Calcular días desde última revisión si no existe
+            if 'Dias_desde_revision' not in riesgo_df.columns:
+                hoy = pd.Timestamp.now()
+                riesgo_df['Dias_desde_revision'] = (hoy - riesgo_df['Ultima_Revision']).dt.days
+            
+            # Convertir tickets a numérico
+            riesgo_df['Ticket_Abierto_Num'] = (riesgo_df['Ticket_Soporte_Abierto_Limpio'] == 'Si').astype(int)
+            
+            # Agregar por Bodega
+            riesgo_agg = riesgo_df.groupby('Bodega_Origen').agg({
+                'Dias_desde_revision': 'mean',
+                'Ticket_Abierto_Num': 'mean',
+                'Satisfaccion_NPS': 'mean',
+                'SKU_ID': 'nunique',
+                'Transaccion_ID': 'count'
+            }).reset_index()
+            riesgo_agg.columns = ['Bodega_Origen', 'Dias_Promedio_Sin_Revision', 'Tasa_Tickets', 'NPS_Promedio', 'SKUs_Unicos', 'Num_Transacciones']
+            riesgo_agg['Tasa_Tickets_Pct'] = riesgo_agg['Tasa_Tickets'] * 100
+            
+            # Scatter plot con zonas de riesgo
+            fig_riesgo = px.scatter(
+                riesgo_agg,
+                x='Dias_Promedio_Sin_Revision',
+                y='Tasa_Tickets_Pct',
+                size='Num_Transacciones',
+                color='NPS_Promedio',
+                hover_data=['Bodega_Origen', 'SKUs_Unicos', 'Num_Transacciones'],
+                text='Bodega_Origen',
+                title='Relación entre Antigüedad de Revisión de Inventario y Tasa de Tickets de Soporte',
+                labels={
+                    'Dias_Promedio_Sin_Revision': 'Días promedio desde última revisión',
+                    'Tasa_Tickets_Pct': 'Tasa de Tickets de Soporte (%)',
+                    'NPS_Promedio': 'NPS Promedio',
+                    'Num_Transacciones': 'Volumen de Transacciones'
+                },
+                color_continuous_scale='RdYlGn_r',
+                size_max=30
+            )
+            
+            # Umbrales
+            umbral_dias = 90
+            umbral_tickets = 30
+            
+            fig_riesgo.add_hline(y=umbral_tickets, line_dash="dash", line_color="red",
+                                annotation_text=f"Umbral Crítico: {umbral_tickets}% tickets",
+                                annotation_position="right")
+            fig_riesgo.add_vline(x=umbral_dias, line_dash="dash", line_color="orange",
+                                annotation_text=f"Umbral: {umbral_dias} días sin revisar",
+                                annotation_position="top")
+            
+            # Zona de alto riesgo
+            fig_riesgo.add_shape(
+                type="rect",
+                x0=umbral_dias, x1=riesgo_agg['Dias_Promedio_Sin_Revision'].max() * 1.1,
+                y0=umbral_tickets, y1=riesgo_agg['Tasa_Tickets_Pct'].max() * 1.1,
+                fillcolor="red", opacity=0.15, line_width=0
+            )
+            
+            fig_riesgo.update_traces(textposition='top center')
+            fig_riesgo.update_layout(height=500)
+            st.plotly_chart(fig_riesgo, use_container_width=True)
+            
+            # Identificar bodegas críticas
+            bodegas_criticas = riesgo_agg[
+                (riesgo_agg['Dias_Promedio_Sin_Revision'] > umbral_dias) & 
+                (riesgo_agg['Tasa_Tickets_Pct'] > umbral_tickets)
+            ].sort_values('Tasa_Tickets_Pct', ascending=False)
+            
+            if len(bodegas_criticas) > 0:
+                st.error(f"🚨 **{len(bodegas_criticas)} bodega(s) en zona de alto riesgo operativo:**")
+                
+                for idx, row in bodegas_criticas.iterrows():
+                    st.markdown(f"""
+                    - **{row['Bodega_Origen']}**: 
+                      - {row['Dias_Promedio_Sin_Revision']:.0f} días sin revisar inventario
+                      - {row['Tasa_Tickets_Pct']:.1f}% de tasa de tickets
+                      - NPS promedio: {row['NPS_Promedio']:.1f}
+                      - {row['Num_Transacciones']} transacciones procesadas
+                    """)
+                
+                st.markdown("""
+                ### 🎯 Acciones Inmediatas Requeridas:
+                1. **Auditoría física urgente** del inventario en estas bodegas
+                2. **Implementar calendario de revisión periódica** (máx. cada 60 días)
+                3. **Capacitación al personal** sobre impacto de inventario desactualizado
+                4. **Análisis de root cause** de tickets de soporte asociados
+                """)
+            else:
+                st.success("✅ Ninguna bodega se encuentra en la zona de alto riesgo operativo.")
+            
+            # Tabla detallada
+            st.subheader("📊 Detalle por Bodega")
+            st.dataframe(
+                riesgo_agg.sort_values('Tasa_Tickets_Pct', ascending=False),
+                use_container_width=True,
+                column_config={
+                    "Dias_Promedio_Sin_Revision": st.column_config.NumberColumn("Días sin revisión", format="%.0f"),
+                    "Tasa_Tickets_Pct": st.column_config.NumberColumn("Tasa de tickets (%)", format="%.1f%%"),
+                    "NPS_Promedio": st.column_config.NumberColumn("NPS Promedio", format="%.1f"),
+                    "Num_Transacciones": st.column_config.NumberColumn("Transacciones", format="%d")
+                }
+            )
+            
+            # Análisis de correlación
+            corr_revision_tickets = riesgo_agg[['Dias_Promedio_Sin_Revision', 'Tasa_Tickets_Pct']].corr().iloc[0, 1]
+            corr_revision_nps = riesgo_agg[['Dias_Promedio_Sin_Revision', 'NPS_Promedio']].corr().iloc[0, 1]
+            
+            corr_col1, corr_col2, corr_col3 = st.columns(3)
+            corr_col1.metric(
+                "Correlación: Días sin revisar vs Tickets",
+                f"{corr_revision_tickets:.3f}",
+                help="Correlación positiva indica que más días sin revisar = más tickets"
+            )
+            corr_col2.metric(
+                "Correlación: Días sin revisar vs NPS",
+                f"{corr_revision_nps:.3f}",
+                help="Correlación negativa indica que más días sin revisar = menor NPS"
+            )
+            corr_col3.metric(
+                "Bodegas auditadas",
+                len(riesgo_agg)
+            )
+            
+            st.markdown(f"""
+            ### 📈 Interpretación:
+            - {'✅ **Correlación positiva detectada**' if corr_revision_tickets > 0.3 else '⚠️ Correlación débil'} 
+              entre antigüedad de revisión y tickets de soporte ({corr_revision_tickets:.2f})
+            - {'🚨 **Correlación negativa confirmada**' if corr_revision_nps < -0.2 else 'ℹ️ Impacto limitado'} 
+              entre antigüedad de revisión y NPS ({corr_revision_nps:.2f})
+            
+            **Conclusión**: {'Las bodegas que no revisan su inventario frecuentemente generan más problemas operativos y menor satisfacción del cliente.' if abs(corr_revision_nps) > 0.2 else 'El impacto de la frecuencia de revisión en NPS es limitado. Considerar otros factores.'}
+            """)
+        else:
+            st.warning("⚠️ No hay datos suficientes para el análisis de riesgo operativo (requiere fechas de revisión y tickets).")
 
 else:
     st.info("Por favor, carga los tres archivos CSV en el panel lateral para comenzar.")
