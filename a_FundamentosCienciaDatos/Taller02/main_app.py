@@ -905,12 +905,6 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         y cómo impacta esto en la satisfacción del cliente?
         """)
         
-        # DEBUG: Mostrar columnas disponibles
-        st.write("**🔍 DEBUG - Columnas en joined_df:**")
-        st.write(f"Total columnas: {len(joined_df.columns)}")
-        columnas_inventario = [col for col in joined_df.columns if any(x in col.lower() for x in ['ultima', 'revision', 'bodega', 'stock', 'costo'])]
-        st.write(f"Columnas de Inventario encontradas: {columnas_inventario}")
-        
         # Verificar columnas necesarias
         columnas_necesarias = ['Ultima_Revision', 'Ticket_Soporte_Abierto_Limpio', 'Bodega_Origen']
         columnas_presentes = [col for col in columnas_necesarias if col in joined_df.columns]
