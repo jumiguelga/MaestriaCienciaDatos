@@ -1815,7 +1815,13 @@ def main() -> None:
             },
         ])
 
-        st.dataframe(health_df, use_container_width=True)
+        st.dataframe(
+            health_df.style.format({
+                "Health Score (raw)": "{:.2f}%",
+                "Health Score (final)": "{:.2f}%"
+            }),
+            use_container_width=True
+        )
 
         audit_report = {
             "inventario": inv_health,
@@ -1855,6 +1861,9 @@ def main() -> None:
         st.subheader("📊 Operaciones")
 
         st.markdown("### 1️⃣ Margen negativo — insights accionables")
+
+        # FIX: Re-compute analysis results to ensure they reflect exclusions applied to 'joined'
+        analysis_results = compute_analysis(joined)
 
         if "margen_por_categoria" in analysis_results:
             df_cat = analysis_results["margen_por_categoria"].copy()
@@ -1984,6 +1993,20 @@ def main() -> None:
     # --- Tab 4: PDF (AUTO + vista previa)
     with tabs[4]:
         st.subheader("📄 Documento de Hallazgos (PDF)")
+
+        # Record changes for the report
+        with st.expander("📝 Registro de Cambios y Configuración", expanded=False):
+            st.write("Configuraciones aplicadas en esta sesión:")
+            st.write(f"**Inventario:** {', '.join(inv_desc) if inv_desc else 'Valores por defecto'}")
+            st.write(f"**Transacciones:** {', '.join(tx_desc) if tx_desc else 'Valores por defecto'}")
+            st.write(f"**Feedback:** {', '.join(fb_desc) if fb_desc else 'Valores por defecto'}")
+            if inv_flags:
+                st.write(f"**Filtros Inventario:** {', '.join(inv_flags)}")
+            if tx_flags:
+                st.write(f"**Filtros Transacciones:** {', '.join(tx_flags)}")
+            if fb_flags:
+                st.write(f"**Filtros Feedback:** {', '.join(fb_flags)}")
+
         st.write("Este PDF es el informe de consultoría para junta directiva. Incluye narrativa, evidencia y plan de acción.")
 
         # 1) Vista previa (igual a impresión)
@@ -1994,7 +2017,8 @@ def main() -> None:
         )
 
         st.markdown("### Vista previa (se imprime igual)")
-        st.text_area("Contenido del informe", value=report_text, height=420)
+        with st.container(border=True):
+            st.markdown(report_text.replace("\n", "  \n"))
 
         # 2) Evidencias visuales (auto desde gráficos)
         st.markdown("### Evidencia visual (auto desde el dashboard)")
