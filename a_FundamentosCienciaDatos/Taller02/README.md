@@ -52,6 +52,11 @@ Consolida los hallazgos más críticos del análisis:
 4. **Fuga de Capital**: Identificación de SKUs con margen neto negativo (pérdidas).
 5. **Crisis Logística**: Heatmap de correlación entre tiempo de entrega y satisfacción NPS, identificando rutas críticas que requieren atención inmediata.
 
+#### 🤖 Pestaña 6: Chat con Agente
+Pestaña de chat con un agente de IA (Groq) que tiene acceso al contexto completo del dashboard: resúmenes de datos, métricas, NPS, SKUs fantasma, márgenes, logs y comentarios del analista.
+- Configure su **API Key de Groq** en el panel lateral o en `.streamlit/secrets.toml` (variable `GROQ_API_KEY`).
+- Instale el paquete: `pip install groq`.
+
 ---
 
 ### 📄 Exportación de Resultados

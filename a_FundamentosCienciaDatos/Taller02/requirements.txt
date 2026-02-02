@@ -12,4 +12,4 @@ Pillow
 reportlab
 rapidfuzz
 requests
-openai>=1.0.0
+groq>=0.4.0

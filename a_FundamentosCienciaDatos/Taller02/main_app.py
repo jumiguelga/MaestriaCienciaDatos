@@ -18,12 +18,12 @@ from reportlab.lib import colors
 # Configuración de la página
 st.set_page_config(page_title="Data Quality & EDA Dashboard", layout="wide")
 
-# OpenAI for Agent (optional)
+# Groq for Agent (optional)
 try:
-    from openai import OpenAI
-    OPENAI_AVAILABLE = True
+    from groq import Groq
+    GROQ_AVAILABLE = True
 except ImportError:
-    OPENAI_AVAILABLE = False
+    GROQ_AVAILABLE = False
 
 # --- ESTADO DE LA SESIÓN ---
 if 'logs' not in st.session_state:
@@ -109,22 +109,37 @@ uploaded_inv = st.sidebar.file_uploader("Cargar Inventario (CSV)", type=["csv"])
 uploaded_tx = st.sidebar.file_uploader("Cargar Transacciones (CSV)", type=["csv"])
 uploaded_fb = st.sidebar.file_uploader("Cargar Feedback (CSV)", type=["csv"])
 
-# API Key for AI Agent
+# API Key for AI Agent (Groq) - from secrets or sidebar override
+def _get_groq_api_key():
+    """API Key from Streamlit secrets first, then session state override."""
+    try:
+        from_secrets = st.secrets.get("GROQ_API_KEY", "")
+    except (FileNotFoundError, KeyError, AttributeError):
+        from_secrets = ""
+    return (st.session_state.api_key or from_secrets or "").strip()
+
 st.sidebar.subheader("🤖 Agente de Análisis (Opcional)")
-with st.sidebar.expander("Configurar API Key"):
+with st.sidebar.expander("Configurar API Key (Groq)"):
+    _secret_help = (
+        "Configúrelo en .streamlit/secrets.toml:\n"
+        "GROQ_API_KEY = \"gsk_...\"\n\n"
+        "O ingréselo aquí (se mantiene en sesión):"
+    )
     api_key_input = st.text_input(
-        "API Key (OpenAI)",
+        "API Key (Groq)",
         value=st.session_state.api_key,
         type="password",
-        placeholder="sk-...",
-        help="Ingrese su API Key de OpenAI para habilitar el chat con el agente."
+        placeholder="gsk_...",
+        help=_secret_help,
+        key="groq_api_key_input"
     )
     if api_key_input:
         st.session_state.api_key = api_key_input
-    if st.session_state.api_key:
-        st.success("✅ API Key configurada")
+    groq_key = _get_groq_api_key()
+    if groq_key:
+        st.success("✅ API Key configurada (Groq)")
     else:
-        st.info("Configure una API Key para usar el chat con el agente.")
+        st.info("Configure GROQ_API_KEY en secrets o aquí para el chat con el agente.")
 
 # Opciones de limpieza global
 st.sidebar.subheader("Opciones de Limpieza")
@@ -1146,10 +1161,11 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
             margen_negativo_loss=margen_neg_loss,
         )
 
-        if not OPENAI_AVAILABLE:
-            st.error("⚠️ El paquete `openai` no está instalado. Ejecute: `pip install openai`")
-        elif not st.session_state.api_key:
-            st.info("Configure su API Key de OpenAI en el panel lateral (Configurar API Key) para habilitar el chat con el agente.")
+        groq_api_key = _get_groq_api_key()
+        if not GROQ_AVAILABLE:
+            st.error("⚠️ El paquete `groq` no está instalado. Ejecute: `pip install groq`")
+        elif not groq_api_key:
+            st.info("Configure su API Key de Groq en el panel lateral (Configurar API Key) o en .streamlit/secrets.toml (GROQ_API_KEY) para habilitar el chat con el agente.")
         else:
             # System prompt with full context
             SYSTEM_PROMPT = """Eres un asistente experto en análisis de datos, calidad de datos y business intelligence.
@@ -1172,7 +1188,7 @@ Si te preguntan algo fuera del contexto, indica amablemente que solo puedes resp
                 with st.chat_message("assistant"):
                     with st.spinner("Pensando..."):
                         try:
-                            client = OpenAI(api_key=st.session_state.api_key)
+                            client = Groq(api_key=groq_api_key)
                             messages = [
                                 {"role": "system", "content": SYSTEM_PROMPT + "\n\n--- CONTEXTO DEL DASHBOARD ---\n\n" + agent_context},
                             ]
@@ -1180,7 +1196,7 @@ Si te preguntan algo fuera del contexto, indica amablemente que solo puedes resp
                                 messages.append({"role": m["role"], "content": m["content"]})
 
                             response = client.chat.completions.create(
-                                model="gpt-4o-mini",
+                                model="llama-3.1-70b-versatile",
                                 messages=messages,
                                 temperature=0.4,
                             )
@@ -1188,7 +1204,7 @@ Si te preguntan algo fuera del contexto, indica amablemente que solo puedes resp
                             st.markdown(reply)
                             st.session_state.chat_messages.append({"role": "assistant", "content": reply})
                         except Exception as e:
-                            err_msg = f"Error al contactar la API: {str(e)}"
+                            err_msg = f"Error al contactar la API de Groq: {str(e)}"
                             st.error(err_msg)
                             st.session_state.chat_messages.append({"role": "assistant", "content": err_msg})
 
