@@ -18,6 +18,9 @@ st.set_page_config(page_title="Data Quality & EDA Dashboard", layout="wide")
 if 'logs' not in st.session_state:
     st.session_state.logs = []
 
+if 'fb_clean_adjusted' not in st.session_state:
+    st.session_state.fb_clean_adjusted = None
+
 def add_log(action):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     st.session_state.logs.append({"timestamp": timestamp, "action": action})
@@ -85,6 +88,10 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
     inv_clean, inv_report = feda.sanitize_inventario(inv_raw)
     fb_clean = feda.limpiar_feedback_basico(fb_raw)
     
+    # Aplicar ajustes persistentes de sesión si existen
+    if st.session_state.fb_clean_adjusted is not None:
+        fb_clean = st.session_state.fb_clean_adjusted
+    
     # Logging inicial
     if 'initial_clean' not in st.session_state:
         add_log("Carga de archivos y limpieza inicial ejecutada.")
@@ -138,17 +145,14 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         add_log("Feedback duplicado excluido.")
 
     # Exclusión global de Outliers/Nulos
+    inv_clean, tx_clean, fb_clean = feda.aplicar_exclusion_global(
+        inv_clean, tx_clean, fb_clean, 
+        exclude_outliers=exclude_outliers, 
+        exclude_nulls=exclude_nulls
+    )
     if exclude_outliers:
-        if 'outlier_costo' in inv_clean.columns:
-            inv_clean = inv_clean[inv_clean['outlier_costo'] == False]
-        if 'outlier_precio' in tx_clean.columns:
-            tx_clean = tx_clean[tx_clean['outlier_precio'] == False]
         add_log("Outliers excluidos globalmente.")
-
     if exclude_nulls:
-        inv_clean = inv_clean.dropna()
-        tx_clean = tx_clean.dropna()
-        fb_clean = fb_clean.dropna()
         add_log("Filas con nulos excluidas globalmente.")
 
     # JOIN Final para EDA
@@ -349,6 +353,7 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
                 num_outliers = outliers_mask.sum()
                 if num_outliers > 0:
                     fb_clean.loc[outliers_mask, 'Edad_Cliente'] = median_age
+                    st.session_state.fb_clean_adjusted = fb_clean.copy()
                     add_log(f"Se ajustaron {num_outliers} outliers de edad a la mediana ({median_age}).")
                     st.success(f"Se han ajustado {num_outliers} registros.")
                     # Forzamos recarga para ver cambios en gráficas

@@ -530,3 +530,34 @@ def feature_engineering(joined: pd.DataFrame) -> pd.DataFrame:
         df["Dias_desde_revision"] = (today_dt - df["Ultima_Revision"].dt.floor("D")).dt.days
     
     return df
+
+
+def aplicar_exclusion_global(
+    inv_df: pd.DataFrame, 
+    tx_df: pd.DataFrame, 
+    fb_df: pd.DataFrame, 
+    exclude_outliers: bool = False, 
+    exclude_nulls: bool = False
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Aplica exclusión de outliers y nulos de forma global a los tres datasets.
+    """
+    inv_c = inv_df.copy()
+    tx_c = tx_df.copy()
+    fb_c = fb_df.copy()
+
+    if exclude_outliers:
+        if "outlier_costo" in inv_c.columns:
+            inv_c = inv_c[inv_c["outlier_costo"] == False]
+        if "outlier_precio" in tx_c.columns:
+            tx_c = tx_c[tx_c["outlier_precio"] == False]
+        if "Edad_Cliente" in fb_c.columns:
+            age_outliers = outlier_flag_iqr(fb_c, "Edad_Cliente")
+            fb_c = fb_c[~age_outliers]
+
+    if exclude_nulls:
+        inv_c = inv_c.dropna()
+        tx_c = tx_c.dropna()
+        fb_c = fb_c.dropna()
+
+    return inv_c, tx_c, fb_c
