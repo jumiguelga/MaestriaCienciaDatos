@@ -481,44 +481,50 @@ def build_join_dataset(
 ) -> pd.DataFrame:
     """
     Construye el JOIN final: Transacciones ↔ Inventario ↔ Feedback
-    Incluye flags de SKU fantasma y sin feedback.
-    IMPORTANTE: Asegura que Ultima_Revision y Bodega_Origen se unan correctamente.
+    REESCRITO para garantizar que Ultima_Revision, Bodega_Origen y Ticket_Soporte_Abierto_Limpio se preserven.
     """
-    # Preparar datos
+    # 1. Preparar Inventario
     invj = inv_clean.copy()
     invj["SKU_ID"] = invj["SKU_ID"].astype("string").str.strip()
     
-    # Convertir Ultima_Revision a datetime si existe
+    # IMPORTANTE: Convertir Ultima_Revision a datetime ANTES del merge
     if "Ultima_Revision" in invj.columns:
         invj["Ultima_Revision"] = pd.to_datetime(invj["Ultima_Revision"], errors="coerce")
     
+    # 2. Preparar Transacciones
     txj = tx_final.copy()
     txj["SKU_ID"] = txj["SKU_ID"].astype("string").str.strip()
     if "Transaccion_ID" in txj.columns:
         txj["Transaccion_ID"] = txj["Transaccion_ID"].astype("string").str.strip()
     
+    # 3. Preparar Feedback
     fbj = fb_clean.copy()
     if "Transaccion_ID" in fbj.columns:
         fbj["Transaccion_ID"] = fbj["Transaccion_ID"].astype("string").str.strip()
     
-    # JOIN: Tx ↔ Inv (asegurar que TODAS las columnas de inv se unan)
-    join_tx_inv = txj.merge(
-        invj, on="SKU_ID", how="left", suffixes=("", "_inv"), indicator="merge_tx_inv"
+    # 4. JOIN #1: Transacciones ← LEFT JOIN → Inventario (por SKU_ID)
+    # Esto trae Ultima_Revision, Bodega_Origen, Stock_Actual, Costo_Unitario_USD, etc.
+    joined = txj.merge(
+        invj, 
+        on="SKU_ID", 
+        how="left", 
+        suffixes=("", "_inv")
     )
-    join_tx_inv["flag_sku_fantasma"] = (join_tx_inv["merge_tx_inv"] == "left_only")
     
-    # Resolver colisiones de nombres si las hay (excepto SKU_ID que es la llave)
-    # Si hay columnas con el mismo nombre en tx e inv, la de inv tendrá sufijo _inv
-    # Pero queremos mantener las de tx como principales.
+    # Flag para SKUs fantasma (sin match en inventario)
+    joined["flag_sku_fantasma"] = joined["Bodega_Origen"].isna()
     
-    # JOIN: (Tx+Inv) ↔ Feedback
-    joined = join_tx_inv.merge(
-        fbj, on="Transaccion_ID", how="left", indicator="merge_tx_fb"
+    # 5. JOIN #2: (Tx + Inv) ← LEFT JOIN → Feedback (por Transaccion_ID)
+    # Esto trae Ticket_Soporte_Abierto_Limpio, Satisfaccion_NPS, etc.
+    joined = joined.merge(
+        fbj,
+        on="Transaccion_ID",
+        how="left",
+        suffixes=("", "_fb")
     )
-    joined["flag_sin_feedback"] = (joined["merge_tx_fb"] == "left_only")
     
-    # Limpiar columnas de merge
-    joined = joined.drop(columns=["merge_tx_inv", "merge_tx_fb"], errors="ignore")
+    # Flag para transacciones sin feedback
+    joined["flag_sin_feedback"] = joined["Ticket_Soporte_Abierto_Limpio"].isna()
     
     return joined
 
