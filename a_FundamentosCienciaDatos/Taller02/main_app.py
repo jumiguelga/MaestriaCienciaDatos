@@ -147,13 +147,15 @@ with col1:
 with col2:
     st.metric("Feedback final", len(fb_final))
 
-# ===== SECCIÓN 3: HEALTH SCORE =====
-st.header("3️⃣ Health Score")
+# ===== SECCIÓN 3: HEALTH SCORE & OUTLIERS =====
+st.header("3️⃣ Health Score y Anomalías")
 
 flags = [
     "Costo_Envio_Imputado",
     "flag_sku_fantasma",
     "flag_sin_feedback",
+    "outlier_costo",
+    "outlier_precio",
 ]
 
 health = compute_health_metrics(
@@ -169,12 +171,26 @@ with col1:
 with col2:
     st.metric("Filas (final)", health["rows_final"])
 with col3:
-    st.metric("Health Score (raw)", f"{health['health_score_raw']:.1f}%")
-with col4:
     st.metric("Health Score (final)", f"{health['health_score_final']:.1f}%")
+with col4:
+    st.metric("Filas eliminadas", health["rows_removed"], delta=f"{health['pct_removed']}%", delta_color="inverse")
 
-with st.expander("📊 Detalles completos del Health Score"):
+with st.expander("📊 Detalles completos del Health Score y Outliers"):
     st.json(health)
+    
+    col_out1, col_out2 = st.columns(2)
+    with col_out1:
+        if "outlier_costo" in inv_clean.columns:
+            n_out_inv = inv_clean["outlier_costo"].sum()
+            st.warning(f"Outliers en Costo_Unitario: {int(n_out_inv)}")
+            if n_out_inv > 0:
+                st.dataframe(inv_clean[inv_clean["outlier_costo"]], use_container_width=True)
+    with col_out2:
+        if "outlier_precio" in tx_final.columns:
+            n_out_tx = tx_final["outlier_precio"].sum()
+            st.warning(f"Outliers en Precio_Venta: {int(n_out_tx)}")
+            if n_out_tx > 0:
+                st.dataframe(tx_final[tx_final["outlier_precio"]], use_container_width=True)
 
 # ===== SECCIÓN 4: JOIN DATASET =====
 st.header("4️⃣ Dataset Integrado (JOIN)")

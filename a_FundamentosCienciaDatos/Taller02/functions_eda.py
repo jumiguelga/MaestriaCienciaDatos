@@ -4,7 +4,44 @@ from datetime import datetime
 import dictionaries as dicts
 from sklearn.impute import KNNImputer
 import re
+import unicodedata
 from typing import Dict, Tuple, List, Any, Optional
+
+# -------------------------------------------------------------------
+# HELPERS: NORMALIZACIÓN Y OUTLIERS
+# -------------------------------------------------------------------
+
+def normalize_text(x: Any) -> Any:
+    """Normaliza texto: quita acentos, caracteres especiales y pasa a minúsculas."""
+    if pd.isna(x):
+        return np.nan
+    raw = str(x).strip()
+    if raw == "":
+        return np.nan
+    # Normalización unicode y remover acentos
+    x2 = unicodedata.normalize("NFKD", raw.lower()).encode("ascii", "ignore").decode("utf-8")
+    # Quitar caracteres especiales excepto espacios y números
+    x2 = re.sub(r"[^a-z0-9\s]", " ", x2)
+    x2 = re.sub(r"\s+", " ", x2).strip()
+    return x2 or np.nan
+
+def iqr_bounds(series: pd.Series, k: float = 1.5) -> Tuple[float, float]:
+    """Calcula límites IQR."""
+    q1 = series.quantile(0.25)
+    q3 = series.quantile(0.75)
+    iqr = q3 - q1
+    return q1 - k * iqr, q3 + k * iqr
+
+def outlier_flag_iqr(df: pd.DataFrame, col: str, k: float = 1.5) -> pd.Series:
+    """Retorna máscara booleana de outliers para una columna."""
+    if col not in df.columns:
+        return pd.Series(False, index=df.index)
+    s = pd.to_numeric(df[col], errors="coerce")
+    base = s.dropna()
+    if len(base) < 5: # Mínimo para que tenga sentido
+        return pd.Series(False, index=df.index)
+    low, high = iqr_bounds(base, k)
+    return s.notna() & ((s < low) | (s > high))
 
 # -------------------------------------------------------------------
 # LIMPIEZA ESTÁNDAR: INVENTARIO
@@ -18,19 +55,23 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
     df = dataframe.copy()
     report = {}
 
-    # 1. Remover espacios en blanco en columnas categóricas
+    # 1. Remover espacios en blanco y normalizar texto
     cat_cols = df.select_dtypes(include=["object", "string"]).columns
-    affected_spaces = 0
+    affected_norm = 0
     for col in cat_cols:
-        mask = df[col].notnull() & (df[col] != df[col].astype(str).str.strip())
-        affected_spaces += mask.sum()
-        df[col] = df[col].where(df[col].isnull(), df[col].astype(str).str.strip())
-    report["Remover espacios en blanco"] = int(affected_spaces)
+        original = df[col].copy()
+        df[col] = df[col].apply(normalize_text)
+        affected_norm += (df[col] != original).sum()
+    report["Normalización de texto (minúsculas, acentos, etc.)"] = int(affected_norm)
 
-    # 2. Reemplazar cadenas vacías por NA
-    before_empty = df[cat_cols].isin([""]).sum().sum()
-    df[cat_cols] = df[cat_cols].replace({"": pd.NA})
-    report["Reemplazar cadenas vacías por NA"] = int(before_empty)
+    # 2. Reemplazar nulos/vacíos en categóricas (ya manejado por normalize_text en parte)
+    report["Reemplazar cadenas vacías por NA"] = int(df[cat_cols].isna().sum().sum())
+
+    # 2.1 Renombrar columnas si es necesario para consistencia
+    if "stock_actual" in df.columns and "Stock_Actual" not in df.columns:
+        df = df.rename(columns={"stock_actual": "Stock_Actual"})
+    if "lead_time_dias" in df.columns and "Lead_Time_Dias" not in df.columns:
+        df = df.rename(columns={"lead_time_dias": "Lead_Time_Dias"})
 
     # 3. Conversión de fechas en 'Ultima_Revision'
     if "Ultima_Revision" in df.columns:
@@ -67,14 +108,13 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
 
     # 6. Normalización de Categoria
     if "Categoria" in df.columns:
-        before_cat = (
-            df["Categoria"].notnull()
-            & df["Categoria"].isin(dicts.mapping_categorias.keys())
-        ).sum()
         df["Categoria"] = (
-            df["Categoria"].astype("string").str.strip().replace(dicts.mapping_categorias)
+            df["Categoria"]
+            .astype("string")
+            .str.strip()
+            .replace(dicts.mapping_categorias)
         )
-        report["Normalización de Categoria"] = int(before_cat)
+        report["Normalización de Categoria"] = int(df["Categoria"].notnull().sum())
 
     # 7. Rellenar nulos en Lead_Time_Dias y normalizar texto
     affected_lead = 0
@@ -88,8 +128,6 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
 
     # 8. Rellenar nulos en Stock_Actual con 0
     affected_stock_null = 0
-    if "stock_actual" in df.columns and "Stock_Actual" not in df.columns:
-        df = df.rename(columns={"stock_actual": "Stock_Actual"})
     if "Stock_Actual" in df.columns:
         mask = df["Stock_Actual"].isnull()
         affected_stock_null = mask.sum()
@@ -97,6 +135,10 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
             df["Stock_Actual"], errors="coerce"
         ).fillna(0)
     report["Rellenar nulos en Stock_Actual con 0"] = int(affected_stock_null)
+    # 9. Detección de outliers (IQR)
+    if "Costo_Unitario_USD" in df.columns:
+        df["outlier_costo"] = outlier_flag_iqr(df, "Costo_Unitario_USD")
+        report["Outliers detectados en Costo_Unitario_USD"] = int(df["outlier_costo"].sum())
 
     inventarios_report = pd.DataFrame(
         list(report.items()), columns=["Proceso", "Filas_afectadas"]
@@ -115,6 +157,11 @@ def sanitize_transacciones(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.Da
     """
     df = dataframe.copy()
     report = {}
+
+    # 0. Normalización de texto básica
+    cat_cols = df.select_dtypes(include=["object", "string"]).columns
+    for col in cat_cols:
+        df[col] = df[col].apply(normalize_text)
 
     # 1. Conversión de fechas en 'Fecha_Venta'
     if "Fecha_Venta" in df.columns:
@@ -176,6 +223,11 @@ def sanitize_transacciones(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.Da
             .replace(dicts.mapping_estado_envio)
         )
         report["Normalización de Estado_Envio"] = int(before_status)
+
+    # 6. Detección de outliers (IQR)
+    if "Precio_Venta_Final" in df.columns:
+        df["outlier_precio"] = outlier_flag_iqr(df, "Precio_Venta_Final")
+        report["Outliers detectados en Precio_Venta_Final"] = int(df["outlier_precio"].sum())
 
     transacciones_report = pd.DataFrame(
         list(report.items()), columns=["Proceso", "Filas_afectadas"]
@@ -416,9 +468,13 @@ def build_join_dataset(
     
     # JOIN: Tx ↔ Inv
     join_tx_inv = txj.merge(
-        invj, on="SKU_ID", how="left", suffixes=("_tx", "_inv"), indicator="merge_tx_inv"
+        invj, on="SKU_ID", how="left", suffixes=("", "_inv"), indicator="merge_tx_inv"
     )
     join_tx_inv["flag_sku_fantasma"] = (join_tx_inv["merge_tx_inv"] == "left_only")
+    
+    # Resolver colisiones de nombres si las hay (excepto SKU_ID que es la llave)
+    # Si hay columnas con el mismo nombre en tx e inv, la de inv tendrá sufijo _inv
+    # Pero queremos mantener las de tx como principales.
     
     # JOIN: (Tx+Inv) ↔ Feedback
     joined = join_tx_inv.merge(
@@ -450,8 +506,11 @@ def feature_engineering(joined: pd.DataFrame) -> pd.DataFrame:
     df["Stock_Actual"] = pd.to_numeric(df.get("Stock_Actual", 0), errors="coerce").fillna(0)
     
     # Ingreso, Costos, Márgenes
+    # Si Costo_Unitario_USD vino de Inventario, ahora se llama Costo_Unitario_USD (o Costo_Unitario_USD_inv si hubo colisión)
+    costo_col = "Costo_Unitario_USD" if "Costo_Unitario_USD" in df.columns else "Costo_Unitario_USD_inv"
+    
     df["Ingreso"] = df["Cantidad_Vendida"] * df["Precio_Venta_Final"]
-    df["Costo_producto"] = df["Cantidad_Vendida"] * df["Costo_Unitario_USD"]
+    df["Costo_producto"] = df["Cantidad_Vendida"] * pd.to_numeric(df.get(costo_col, 0), errors="coerce").fillna(0)
     df["Margen_Bruto"] = df["Ingreso"] - df["Costo_producto"]
     df["Margen_Neto_aprox"] = df["Margen_Bruto"] - df["Costo_Envio"]
     

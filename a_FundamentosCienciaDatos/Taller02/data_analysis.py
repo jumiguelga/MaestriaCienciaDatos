@@ -23,7 +23,7 @@ def compute_analysis(joined: pd.DataFrame) -> Dict[str, Any]:
     
     if "Margen_Bruto" in df.columns and "SKU_ID" in df.columns and "Categoria" in df.columns:
         margen_por_sku = (
-            df.groupby("SKU_ID")
+            df.groupby(["SKU_ID", "Categoria"])
             .agg({
                 "Margen_Bruto": ["sum", "mean", "count"],
                 "Ingreso": "sum",
@@ -31,7 +31,7 @@ def compute_analysis(joined: pd.DataFrame) -> Dict[str, Any]:
             })
             .reset_index()
         )
-        margen_por_sku.columns = ["SKU_ID", "Margen_Total", "Margen_Promedio", "Cantidad_Total", "Ingreso_Total", "Cantidad_Vendida"]
+        margen_por_sku.columns = ["SKU_ID", "Categoria", "Margen_Total", "Margen_Promedio", "N_Ventas", "Ingreso_Total", "Cantidad_Total"]
         margen_negativo = margen_por_sku[margen_por_sku["Margen_Total"] < 0].copy()
         results["margen_negativo"] = margen_negativo
         
@@ -44,7 +44,7 @@ def compute_analysis(joined: pd.DataFrame) -> Dict[str, Any]:
             })
             .reset_index()
         )
-        margen_por_categoria.columns = ["Categoria_clean", "Margen_Total", "Ingreso_Total", "Cantidad"]
+        margen_por_categoria.columns = ["Categoria", "Margen_Total", "Ingreso_Total", "Cantidad_Total"]
         results["margen_por_categoria"] = margen_por_categoria
     
     # =================== P2: LOGÍSTICA VS NPS ===================
@@ -59,7 +59,7 @@ def compute_analysis(joined: pd.DataFrame) -> Dict[str, Any]:
             })
             .reset_index()
         )
-        logistica_nps.columns = ["Ciudad_Destino_clean", "Bodega_Origen_clean", "Tiempo_Entrega_Prom", "NPS_Prom", "N"]
+        logistica_nps.columns = ["Ciudad_Destino", "Bodega_Origen", "Tiempo_Entrega_Prom", "NPS_Prom", "N"]
         results["logistica_vs_nps"] = logistica_nps
     
     # =================== P3: SKU FANTASMA (NO EN INVENTARIO) ===================
@@ -106,7 +106,7 @@ def compute_analysis(joined: pd.DataFrame) -> Dict[str, Any]:
             })
             .reset_index()
         )
-        stock_nps.columns = ["Categoria_clean", "Stock_Prom", "NPS_Prom", "N"]
+        stock_nps.columns = ["Categoria", "Stock_Prom", "NPS_Prom", "N"]
         results["stock_vs_nps_scatter"] = stock_nps
         
         # Alerta: Stock alto + NPS bajo
@@ -127,7 +127,7 @@ def compute_analysis(joined: pd.DataFrame) -> Dict[str, Any]:
             })
             .reset_index()
         )
-        ticket_rate.columns = ["Bodega_Origen_clean", "Ticket_Rate", "N_transacciones"]
+        ticket_rate.columns = ["Bodega_Origen", "Ticket_Rate", "N_transacciones"]
         results["riesgo_bodega_plus"] = ticket_rate
     
     # =================== DONUT: INGRESO EN RIESGO ===================
@@ -247,9 +247,9 @@ def show_p2_logistica_nps(analysis_results: Dict[str, Any]):
         .encode(
             x=alt.X("Tiempo_Entrega_Prom:Q", title="Tiempo entrega (días)"),
             y=alt.Y("NPS_Prom:Q", title="NPS promedio"),
-            color=alt.Color("Bodega_Origen_clean:N", title="Bodega"),
+            color=alt.Color("Bodega_Origen:N", title="Bodega"),
             size=alt.Size("N:Q", title="# transacciones"),
-            tooltip=["Ciudad_Destino_clean", "Bodega_Origen_clean", "Tiempo_Entrega_Prom", "NPS_Prom", "N"]
+            tooltip=["Ciudad_Destino", "Bodega_Origen", "Tiempo_Entrega_Prom", "NPS_Prom", "N"]
         )
         .properties(height=350, title="Entrega vs Satisfacción por ciudad/bodega")
         .interactive()
@@ -304,9 +304,9 @@ def show_p4_stock_nps(analysis_results: Dict[str, Any]):
         .encode(
             x=alt.X("Stock_Prom:Q", title="Stock promedio"),
             y=alt.Y("NPS_Prom:Q", title="NPS promedio"),
-            color=alt.Color("Categoria_clean:N", title="Categoría"),
+            color=alt.Color("Categoria:N", title="Categoría"),
             size=alt.Size("N:Q", title="# tx"),
-            tooltip=["Categoria_clean", "Stock_Prom", "NPS_Prom", "N"]
+            tooltip=["Categoria", "Stock_Prom", "NPS_Prom", "N"]
         )
         .properties(height=350, title="Stock vs Satisfacción")
         .interactive()
@@ -334,14 +334,14 @@ def show_p5_bodega_tickets(analysis_results: Dict[str, Any]):
         alt.Chart(df)
         .mark_bar()
         .encode(
-            x=alt.X("Bodega_Origen_clean:N", title="Bodega", sort="-y"),
+            x=alt.X("Bodega_Origen:N", title="Bodega", sort="-y"),
             y=alt.Y("Ticket_Rate:Q", title="Tasa de tickets (sin feedback)"),
             color=alt.condition(
-                alt.datum.Ticket_Rate > df["Ticket_Rate"].mean(),
+                alt.datum.Ticket_Rate > df["Ticket_Rate"].mean() if not df.empty else 0,
                 alt.value("red"),
                 alt.value("green")
             ),
-            tooltip=["Bodega_Origen_clean", "Ticket_Rate", "N_transacciones"]
+            tooltip=["Bodega_Origen", "Ticket_Rate", "N_transacciones"]
         )
         .properties(height=300, title="Riesgo por bodega (% sin feedback)")
     )
