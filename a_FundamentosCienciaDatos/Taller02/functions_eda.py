@@ -324,16 +324,12 @@ def excluir_ventas_cantidad_negativa(transacciones: pd.DataFrame) -> pd.DataFram
 
 
 def corregir_o_excluir_ventas_futuras(
-        transacciones: pd.DataFrame,
-        modo: str = "corregir",
-) -> pd.DataFrame:
-    """
-    Manejo de ventas futuras:
-    - modo='corregir': resta 1 año a las fechas futuras.
-    - modo='excluir': elimina filas con Fecha_Venta en el futuro.
-    """
+    transacciones: pd.DataFrame,
+    modo: str = "corregir",) -> pd.DataFrame:
     df = transacciones.copy()
-    df["Fecha_Venta"] = pd.to_datetime(df["Fecha_Venta"], errors="coerce")
+    if df["Fecha_Venta"].dtype == "O":
+        df["Fecha_Venta"] = pd.to_datetime(df["Fecha_Venta"], errors="coerce", dayfirst=True)
+    # si ya es datetime64, no la toques
     today = pd.Timestamp(datetime.today().date())
     future_mask = df["Fecha_Venta"] > today
 
