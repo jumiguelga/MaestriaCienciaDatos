@@ -1,6 +1,6 @@
 # Análisis DSS para TechLogistics S.A.S
 ## Comparativo de sistemas ECR y CRM
-**Fecha:** 2026-02-01  
+**Fecha:** 2026-02-02  
 **Autor(es):** 
 - Andrés Felipe Velasco Hernández
 - Juan Miguel Gómez Alzate  
@@ -9,13 +9,13 @@
 
 ---
 
-## 1. Resumen ejecutivo (Pendiente)
+## 1. Resumen ejecutivo
 
-- Presentar una unificación de los valores que se tienen registrados entre 3 diferentes fuentes de información, para tener una relación entre los datos y permitir al negocio tenr una visión de lo que ocurre con sus productos y procesos de ventas.
-- Alcance y periodo cubierto.
-- Hallazgos clave:
-  1. 
-- Conclusión general y recomendaciones de alto nivel.
+Luego de evaluar la información presentada por TechLogistics S.A.S, que fue extraída de sus sistemas de información, y de compartir sus preocupaciones, se efectuó un análisis exploratorio que permitió conocer parte de la problemática, entre ello como lo mencionó la junta, acerca de la falta de comunicación entre sus sistemas de gestión interna.
+
+Dentro de los aspectos relevantes tenemos fugas de ventas que no se encuentran relacionadas con los inventarios de la compañía, así como productos sin clasificar en sus respectivas categorías, lo cual impide realizar un seguimiento adecuado al stock que es administrado en cada una de las bodegas, que por cierto, presentan un nivel crítico de abandono al seguimiento del mismo stock.
+
+Este análisis nos ha permitido otorgar algunas recomendaciones bases con las que la compañía puede iniciar un plan de mejora continua en pro de mejorar y optimizar sus sistemas de información, lo que les permitirá "recobrar la vista" respecto a como se encuentra el negocio. 
 
 ---
 
@@ -172,33 +172,20 @@ NPS afectado por baja percepción debido a tiempos de entrega.
 ### 6.1 Descripción de los datos
 
 - Origen de los datos: los datos son exportes recibidos de 3 fuentes de información diferentes, entre los cuales tenemos un sistema de gestión de inventario, uno de gestión de transacciones y uno de recibimiento de feedback.
-- Rango de fechas: 
+- Rango de fechas: 2024 - 2025
 - Número de registros, variables, principales transformaciones.
 
 Tabla de resumen de calidad de datos:
 
-| Variable       | Tipo      | % Nulos | Notas de calidad                     |
-|----------------|----------|--------:|--------------------------------------|
-| id_cliente     | entero   | 0.0     | Único por registro.                  |
-| fecha_evento   | fecha    | 0.2     | Algunas fechas faltantes.            |
-| monto          | numérico | 1.3     | Outliers detectados en el percentil 99. |
+<img width="1483" height="212" alt="image" src="https://github.com/user-attachments/assets/6139504e-13f2-424e-bbf6-b9ff197d87bd" />
+
 
 ### 6.2 Análisis exploratorio
 
-- Principales patrones observados.
-- Anomalías o desviaciones relevantes.
-
-### 6.3 Modelos o pruebas aplicadas
-
-- Tipo de modelo o prueba (por ejemplo, regresión, test estadístico).
-- Métricas clave (accuracy, precision, recall, AUC, etc.).
-
-Ejemplo de tabla de métricas:
-
-| Modelo         | Métrica | Valor |
-|----------------|--------:|------:|
-| Regresión logística | AUC     | 0.87 |
-| Árbol de decisión   | AUC     | 0.81 |
+- Principales patrones observados:
+  - Los canales de gestión digital no están alineados, siendo el principal impacto de fuga de ingresos.
+  - Las ciudades de Cali y Bucaramanga son las principales afectadas cuando el despacho se realiza desde las bodegas de norte, occidente y sur.
+  - No se evidencia un control de stock regular en ninguna de las bodegas
 
 ---
 
@@ -206,72 +193,18 @@ Ejemplo de tabla de métricas:
 
 - Resumen de los hallazgos más relevantes.
 - Evaluación global del riesgo.
-- Grado de cumplimiento con políticas/normas.
 
 ---
 
 ## 8. Recomendaciones
 
-> Prioriza (por ejemplo, usando la misma escala de severidad definida antes).
+|Recomendación # | Severidad | Descripción breve                                     |
+|----------:||----------:|--------------------------------------------------------|
+|1|| Crítico   | Preparar una revisión de Inventario para actualizar el estado del Stock y los productos faltantes   |
+|2|| Crítico   | Ajustar los sistemas de información para reducir el error del factor humano al momento de instertar la data, limitando los formularios con valores por defecto  |
+|3|| Alto     | Efectuar un análisis de la calidad de la data con el fin de ajustar e imputar de forma correcta los valores faltantes o desconocidos, como categorías, ciudades de destino, estados de entrega, entre otros. |
+|4|| Alto      | Ajustar los Leads Times de acuerdo con la bodega de origen y la ciudad destino |
+|5|| Alto      | Re-distribuir las bodegas para que se focalicen en aquellas ciudades donde sus operaciones tienen una correlación positiva |
+|6|| Alto      | Priorizar la gestión de incidentes (tickets) abieros, y efectuar una campaña de fidelización con los clientes que vienen siendo detractores del servicio |
 
-- Recomendación 1 (Severidad: Alta, Responsable sugerido, Plazo).
-- Recomendación 2 (Severidad: Media, Responsable sugerido, Plazo).
-- Recomendación 3 (Severidad: Baja, Responsable sugerido, Plazo).
 
----
-
-## 9. Plan de acción (opcional)
-
-| ID | Hallazgo relacionado | Acción propuesta                         | Responsable | Fecha objetivo | Estado   |
-|----|----------------------|-------------------------------------------|-------------|----------------|----------|
-| 1  | 5.1                  | Implementar controles adicionales de X.  | Área A      | AAAA-MM-DD     | Pendiente|
-| 2  | 5.2                  | Actualizar política Y.                   | Área B      | AAAA-MM-DD     | En curso |
-
----
-
-## 10. Limitaciones del trabajo
-
-- Limitaciones de datos (calidad, disponibilidad, acceso).
-- Limitaciones metodológicas.
-- Supuestos adoptados.
-
----
-
-## 11. Anexos
-
-### 11.1 Evidencias adicionales
-
-Describe aquí referencias a:
-- Capturas de pantalla.
-- Consultas SQL.
-- Fragmentos de código relevantes.
-
-### 11.2 Código o notebooks
-
-- Enlace al repositorio (GitHub, GitLab, etc.).
-- Rutas de notebooks o scripts clave.
-
----
-
-## Formato para imágenes
-
-### Ejemplo 1: Imagen simple en línea
-
-Texto de contexto previo.
-
-![Descripción de la imagen](ruta/o/url/de/la_imagen.png "Título opcional de la imagen")
-
-Texto de contexto posterior.
-
-### Ejemplo 2: Sección de visualizaciones
-
-## Visualizaciones clave
-
-1. Distribución de variable X  
-   ![Distribución de X](imagenes/distribucion_x.png "Distribución de X")
-
-2. Matriz de correlación  
-   ![Matriz de correlación](imagenes/matriz_correlacion.png "Matriz de correlación")
-
-3. Flujo del proceso auditado  
-   ![Flujo del proceso](imagenes/flujo_proceso.png "Flujo del proceso")
