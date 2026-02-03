@@ -167,14 +167,12 @@ NPS afectado por baja percepción debido a tiempos de entrega.
 
 ---
 
-ACÁ VOY******************
-
 ## 6. Resultados analíticos (si aplica a datos)
 
 ### 6.1 Descripción de los datos
 
-- Origen de los datos.
-- Rango de fechas.
+- Origen de los datos: los datos son exportes recibidos de 3 fuentes de información diferentes, entre los cuales tenemos un sistema de gestión de inventario, uno de gestión de transacciones y uno de recibimiento de feedback.
+- Rango de fechas: 
 - Número de registros, variables, principales transformaciones.
 
 Tabla de resumen de calidad de datos:
