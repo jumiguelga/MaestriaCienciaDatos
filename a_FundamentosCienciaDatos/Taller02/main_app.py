@@ -44,6 +44,11 @@ if 'chat_messages' not in st.session_state:
 if 'api_key' not in st.session_state:
     st.session_state.api_key = ""
 
+if 'insight_ia_result' not in st.session_state:
+    st.session_state.insight_ia_result = None
+if 'insight_ia_timestamp' not in st.session_state:
+    st.session_state.insight_ia_timestamp = None
+
 def add_log(action):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     st.session_state.logs.append({"timestamp": timestamp, "action": action})
@@ -235,14 +240,14 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
     joined_df = feda.build_join_dataset(tx_clean, inv_clean, fb_clean)
     joined_df = feda.feature_engineering(joined_df)
 
-    # --- TABS ---
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "EDA General", "Salud Inventario", "Salud Transacciones", "Salud NPS",
-        "Reporte (Dashboard)", "🤖 Chat con Agente"
+    # --- TABS: Auditoría, Operaciones, Cliente, Insights de IA ---
+    tab_auditoria, tab_operaciones, tab_cliente, tab_insights_ia = st.tabs([
+        "Auditoría", "Operaciones", "Cliente", "Insights de IA"
     ])
 
-    with tab1:
-        st.header("Análisis Exploratorio de Datos (EDA) por Dataset")
+    with tab_auditoria:
+        st.header("Auditoría")
+        st.subheader("Resumen EDA por Dataset")
 
         # --- EDA INVENTARIO ---
         st.subheader("1. EDA: Inventario")
@@ -335,8 +340,8 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
             plt.xticks(rotation=45)
             st.pyplot(fig)
 
-    with tab2:
-        st.header("Análisis de Salud: Inventario")
+        st.divider()
+        st.subheader("Salud: Inventario")
         h_score, nulls, cleaned = compute_health_score(inv_raw, inv_clean)
 
         c1, c2, c3 = st.columns(3)
@@ -350,8 +355,8 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         st.subheader("Muestra de Datos Limpios")
         st.dataframe(inv_clean.head(20))
 
-    with tab3:
-        st.header("Análisis de Salud: Transacciones")
+        st.divider()
+        st.subheader("Salud: Transacciones")
 
         # Gráfico de cantidades negativas
         neg_qty_df = pd.DataFrame()
@@ -408,179 +413,16 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         st.subheader("Reporte de Procesos de Limpieza")
         st.table(tx_report)
 
-    with tab4:
-        st.header("Análisis de Salud: NPS (Feedback)")
+        st.divider()
+        st.subheader("Salud: Feedback")
         h_score, nulls, cleaned = compute_health_score(fb_raw, fb_clean)
-
         c1, c2, c3 = st.columns(3)
         c1.metric("Health Score", f"{h_score:.2f}%")
         c2.metric("Nulos Totales (Raw)", nulls)
         c3.metric("Filas Removidas/Filtradas", cleaned)
+        st.dataframe(fb_clean.head(20))
 
-        if 'Satisfaccion_NPS' in fb_clean.columns:
-            # --- NUEVA VISUALIZACIÓN NPS PROFESIONAL ---
-            st.markdown("---")
-
-            # 1. Preparación de Datos
-            nps_scores = fb_clean['Satisfaccion_NPS'].value_counts().reindex(range(11), fill_value=0)
-            total_respuestas = len(fb_clean)
-
-            detractores = fb_clean[fb_clean['Satisfaccion_NPS'] <= 0]
-            pasivos = fb_clean[(fb_clean['Satisfaccion_NPS'] >= 0.1) & (fb_clean['Satisfaccion_NPS'] <= 50)]
-            promotores = fb_clean[fb_clean['Satisfaccion_NPS'] >= 50.1]
-
-            count_det = len(detractores)
-            count_pas = len(pasivos)
-            count_pro = len(promotores)
-
-            pct_det = (count_det / total_respuestas * 100) if total_respuestas > 0 else 0
-            pct_pas = (count_pas / total_respuestas * 100) if total_respuestas > 0 else 0
-            pct_pro = (count_pro / total_respuestas * 100) if total_respuestas > 0 else 0
-
-            nps_score = pct_pro - pct_det
-
-            # Colores corporativos
-            color_det = "#E91E63"
-            color_pas = "#FFC107"
-            color_pro = "#4CAF50"
-
-            # --- FILA 2: Fórmula y Métricas ---
-            st.markdown(f"<h3 style='text-align: center;'>NPS = <span style='color:{color_pro}'>%PROMOTORES</span> - "
-                        f"<span style='color:{color_det}'>%DETRACTORES</span></h3>", unsafe_allow_html=True)
-
-            col_met1, col_met2, col_met3 = st.columns([1.5, 3, 1])
-
-            with col_met1:
-                # Donut Chart
-                fig_donut, ax_donut = plt.subplots(figsize=(4, 4))
-                sizes = [max(0.1, pct_pro), max(0.1, pct_pas), max(0.1, pct_det)]
-
-                ax_donut.pie(sizes, colors=[color_pro, color_pas, color_det], startangle=90, counterclock=False,
-                             wedgeprops={'width': 0.3, 'edgecolor': 'w', 'linewidth': 2})
-
-                ax_donut.text(0, 0, f"{int(nps_score)}", fontsize=40, ha='center', va='center', fontweight='bold')
-                st.pyplot(fig_donut)
-
-            with col_met2:
-                st.write("") # Espaciador
-                # Estilo de las cajas de métricas
-                def metric_box(label, count, pct, color):
-                    st.markdown(f"""
-                        <div style='display: flex; align-items: center; margin-bottom: 10px;'>
-                            <div style='background-color:{color}; color:white; padding:10px 20px; border-radius:20px; width:150px; text-align:center; font-weight:bold; margin-right:10px;'>{label}</div>
-                            <div style='background-color:{color}; color:white; padding:10px; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; font-weight:bold; margin-right:10px;'>{count}</div>
-                            <div style='background-color:#F0F2F6; padding:10px 20px; border-radius:20px; width:100px; text-align:center; font-weight:bold;'>{pct:.1f}%</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-
-                metric_box("detractores", count_det, pct_det, color_det)
-                metric_box("pasivos", count_pas, pct_pas, color_pas)
-                metric_box("promotores", count_pro, pct_pro, color_pro)
-
-            with col_met3:
-                st.markdown(f"""
-                    <div style='text-align: center; margin-top: 50px;'>
-                        <div style='background-color:#333; color:white; padding:5px 15px; border-radius:15px; display:inline-block; font-weight:bold;'>total</div>
-                        <div style='background-color:#AAA; color:white; width:80px; height:80px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:bold; margin: 10px auto;'>{total_respuestas}</div>
-                    </div>
-                """, unsafe_allow_html=True)
-
-            st.markdown("---")
-        else:
-            st.warning("No se encontró información de NPS procesada.")
-
-        if 'Edad_Cliente' in fb_clean.columns:
-            st.subheader("Análisis de Outliers en Edad")
-
-            # Función para ajustar outliers de edad
-            if st.button("Ajustar Outliers de Edad a la Mediana"):
-                median_age = fb_clean[fb_clean['Edad_Cliente'] <= 100]['Edad_Cliente'].median()
-                outliers_mask = fb_clean['Edad_Cliente'] > 100
-                num_outliers = outliers_mask.sum()
-                if num_outliers > 0:
-                    # Guardar los datos outliers antes de imputar para el log
-                    current_outliers = fb_clean[outliers_mask].copy()
-                    st.session_state.age_outliers_log = pd.concat([st.session_state.age_outliers_log, current_outliers]).drop_duplicates()
-
-                    fb_clean.loc[outliers_mask, 'Edad_Cliente'] = median_age
-                    st.session_state.fb_clean_adjusted = fb_clean.copy()
-                    add_log(f"Se ajustaron {num_outliers} outliers de edad a la mediana ({median_age}).")
-                    st.success(f"Se han ajustado {num_outliers} registros.")
-                    # Forzamos recarga para ver cambios en gráficas
-                    st.rerun()
-                else:
-                    st.info("No se encontraron outliers (> 100 años) para ajustar.")
-
-            # Mostrar log de cambios de edad si existe
-            if not st.session_state.age_outliers_log.empty:
-                with st.expander("Ver log de outliers de edad procesados"):
-                    st.write("Registros que superaban los 100 años y fueron ajustados:")
-                    st.dataframe(st.session_state.age_outliers_log)
-
-            age_outliers = feda.outlier_flag_iqr(fb_clean, 'Edad_Cliente')
-            outlier_df = fb_clean[age_outliers]
-
-            if not outlier_df.empty:
-                st.warning(f"Se detectaron {len(outlier_df)} registros con edades fuera de rango.")
-                col_age1, col_age2 = st.columns(2)
-                with col_age1:
-                    st.write("Muestra de Outliers:")
-                    st.dataframe(outlier_df[['Feedback_ID', 'Edad_Cliente', 'Satisfaccion_NPS']].head(10))
-                with col_age2:
-                    fig, ax = plt.subplots(figsize=(5, 3))
-                    sns.boxplot(x=fb_clean['Edad_Cliente'], ax=ax, color='orange')
-                    ax.set_title("Boxplot de Edad (Feedback)")
-                    st.pyplot(fig)
-            else:
-                st.success("No se detectaron outliers significativos en la edad de los encuestados.")
-        else:
-            # Si no existe la columna 'Edad', informamos (podría ser opcional en el CSV)
-            st.info("La columna 'Edad' no está presente en el dataset de Feedback para el análisis de outliers.")
-
-
-        # NUEVA SECCIÓN: Análisis Comparativo Tickets vs NPS
         st.divider()
-        st.subheader("📊 Comparativo: Tickets Abiertos (Si vs No)")
-
-        if 'Ticket_Soporte_Abierto_Limpio' in joined_df.columns:
-            ticket_counts = joined_df['Ticket_Soporte_Abierto_Limpio'].value_counts().reset_index()
-            ticket_counts.columns = ['Ticket_Abierto', 'Cantidad']
-
-            # Gráfico de barras
-            fig_tickets = px.bar(
-                ticket_counts,
-                x='Ticket_Abierto',
-                y='Cantidad',
-                color='Ticket_Abierto',
-                text='Cantidad',
-                title='Cantidad de Registros: Tickets Abiertos = Si vs No',
-                labels={'Ticket_Abierto': 'Estado del Ticket', 'Cantidad': 'Número de Registros'},
-                color_discrete_map={'Si': '#E91E63', 'No': '#4CAF50'}
-            )
-            fig_tickets.update_traces(textposition='outside')
-            fig_tickets.update_layout(showlegend=False, height=450)
-            st.plotly_chart(fig_tickets, use_container_width=True)
-
-            # Métricas
-            col_m1, col_m2, col_m3 = st.columns(3)
-            cant_si = ticket_counts[ticket_counts['Ticket_Abierto'] == 'Si']['Cantidad'].values
-            cant_no = ticket_counts[ticket_counts['Ticket_Abierto'] == 'No']['Cantidad'].values
-            cant_si = cant_si[0] if len(cant_si) > 0 else 0
-            cant_no = cant_no[0] if len(cant_no) > 0 else 0
-            total = cant_si + cant_no
-
-            col_m1.metric("Tickets Abiertos = Si", f"{cant_si:,}")
-            col_m2.metric("Tickets Abiertos = No", f"{cant_no:,}")
-            col_m3.metric("% Tickets Abiertos (Sí)", f"{(cant_si/total*100):.1f}%" if total > 0 else "0%")
-
-            st.dataframe(ticket_counts, use_container_width=True)
-        else:
-            st.info("ℹ️ Columna 'Ticket_Soporte_Abierto_Limpio' no encontrada.")
-
-    with tab5:
-        st.header("📊 Reporte de Calidad y Análisis de Negocio")
-
-        # SECCIÓN 1: Métricas de Calidad de Datos
         st.subheader("1️⃣ Métricas de Calidad de Datos")
 
         def get_top_nulls(df):
@@ -689,9 +531,9 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
             ax2.set_title("Después (Limpios/Ajustados)")
             st.pyplot(fig_age)
 
+    with tab_operaciones:
+        st.header("Operaciones")
         st.divider()
-
-        # SECCIÓN 3: Análisis de SKUs Fantasma
         st.subheader("3️⃣ Análisis de SKUs Fantasma")
         ghost_skus_all = tx_clean[tx_clean['flag_sku_fantasma'] == True]
 
@@ -1113,10 +955,101 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         else:
             st.warning("⚠️ No hay datos suficientes para el análisis de riesgo operativo (requiere fechas de revisión y tickets).")
 
-    # --- TAB 6: Chat con Agente ---
-    with tab6:
-        st.header("🤖 Chat con Agente de Análisis")
+    with tab_cliente:
+        st.header("Cliente")
+        if 'Satisfaccion_NPS' in fb_clean.columns:
+            st.markdown("---")
+            total_respuestas = len(fb_clean)
+            detractores = fb_clean[fb_clean['Satisfaccion_NPS'] <= 0]
+            pasivos = fb_clean[(fb_clean['Satisfaccion_NPS'] >= 0.1) & (fb_clean['Satisfaccion_NPS'] <= 50)]
+            promotores = fb_clean[fb_clean['Satisfaccion_NPS'] >= 50.1]
+            count_det, count_pas, count_pro = len(detractores), len(pasivos), len(promotores)
+            pct_det = (count_det / total_respuestas * 100) if total_respuestas > 0 else 0
+            pct_pas = (count_pas / total_respuestas * 100) if total_respuestas > 0 else 0
+            pct_pro = (count_pro / total_respuestas * 100) if total_respuestas > 0 else 0
+            nps_score = pct_pro - pct_det
+            color_det, color_pas, color_pro = "#E91E63", "#FFC107", "#4CAF50"
+            st.markdown(f"<h3 style='text-align: center;'>NPS = <span style='color:{color_pro}'>%PROMOTORES</span> - <span style='color:{color_det}'>%DETRACTORES</span></h3>", unsafe_allow_html=True)
+            col_met1, col_met2, col_met3 = st.columns([1.5, 3, 1])
+            with col_met1:
+                fig_donut, ax_donut = plt.subplots(figsize=(4, 4))
+                sizes = [max(0.1, pct_pro), max(0.1, pct_pas), max(0.1, pct_det)]
+                ax_donut.pie(sizes, colors=[color_pro, color_pas, color_det], startangle=90, counterclock=False, wedgeprops={'width': 0.3, 'edgecolor': 'w', 'linewidth': 2})
+                ax_donut.text(0, 0, f"{int(nps_score)}", fontsize=40, ha='center', va='center', fontweight='bold')
+                st.pyplot(fig_donut)
+            with col_met2:
+                def metric_box(label, count, pct, color):
+                    st.markdown(f"<div style='display: flex; align-items: center; margin-bottom: 10px;'><div style='background-color:{color}; color:white; padding:10px 20px; border-radius:20px; width:150px; text-align:center; font-weight:bold; margin-right:10px;'>{label}</div><div style='background-color:{color}; color:white; padding:10px; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; font-weight:bold; margin-right:10px;'>{count}</div><div style='background-color:#F0F2F6; padding:10px 20px; border-radius:20px; width:100px; text-align:center; font-weight:bold;'>{pct:.1f}%</div></div>", unsafe_allow_html=True)
+                metric_box("detractores", count_det, pct_det, color_det)
+                metric_box("pasivos", count_pas, pct_pas, color_pas)
+                metric_box("promotores", count_pro, pct_pro, color_pro)
+            with col_met3:
+                st.markdown(f"<div style='text-align: center; margin-top: 50px;'><div style='background-color:#333; color:white; padding:5px 15px; border-radius:15px; display:inline-block; font-weight:bold;'>total</div><div style='background-color:#AAA; color:white; width:80px; height:80px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:bold; margin: 10px auto;'>{total_respuestas}</div></div>", unsafe_allow_html=True)
+            st.markdown("---")
+        else:
+            st.warning("No se encontró información de NPS procesada.")
+        if 'Edad_Cliente' in fb_clean.columns:
+            st.subheader("Análisis de Outliers en Edad")
+            if st.button("Ajustar Outliers de Edad a la Mediana"):
+                median_age = fb_clean[fb_clean['Edad_Cliente'] <= 100]['Edad_Cliente'].median()
+                outliers_mask = fb_clean['Edad_Cliente'] > 100
+                num_outliers = outliers_mask.sum()
+                if num_outliers > 0:
+                    current_outliers = fb_clean[outliers_mask].copy()
+                    st.session_state.age_outliers_log = pd.concat([st.session_state.age_outliers_log, current_outliers]).drop_duplicates()
+                    fb_clean.loc[outliers_mask, 'Edad_Cliente'] = median_age
+                    st.session_state.fb_clean_adjusted = fb_clean.copy()
+                    add_log(f"Se ajustaron {num_outliers} outliers de edad a la mediana ({median_age}).")
+                    st.success(f"Se han ajustado {num_outliers} registros.")
+                    st.rerun()
+                else:
+                    st.info("No se encontraron outliers (> 100 años) para ajustar.")
+            if not st.session_state.age_outliers_log.empty:
+                with st.expander("Ver log de outliers de edad procesados"):
+                    st.write("Registros que superaban los 100 años y fueron ajustados:")
+                    st.dataframe(st.session_state.age_outliers_log)
+            age_outliers = feda.outlier_flag_iqr(fb_clean, 'Edad_Cliente')
+            outlier_df = fb_clean[age_outliers]
+            if not outlier_df.empty:
+                st.warning(f"Se detectaron {len(outlier_df)} registros con edades fuera de rango.")
+                col_age1, col_age2 = st.columns(2)
+                with col_age1:
+                    st.write("Muestra de Outliers:")
+                    st.dataframe(outlier_df[['Feedback_ID', 'Edad_Cliente', 'Satisfaccion_NPS']].head(10))
+                with col_age2:
+                    fig, ax = plt.subplots(figsize=(5, 3))
+                    sns.boxplot(x=fb_clean['Edad_Cliente'], ax=ax, color='orange')
+                    ax.set_title("Boxplot de Edad (Feedback)")
+                    st.pyplot(fig)
+            else:
+                st.success("No se detectaron outliers significativos en la edad de los encuestados.")
+        else:
+            st.info("La columna 'Edad' no está presente en el dataset de Feedback para el análisis de outliers.")
+        st.divider()
+        st.subheader("📊 Comparativo: Tickets Abiertos (Si vs No)")
+        if 'Ticket_Soporte_Abierto_Limpio' in joined_df.columns:
+            ticket_counts = joined_df['Ticket_Soporte_Abierto_Limpio'].value_counts().reset_index()
+            ticket_counts.columns = ['Ticket_Abierto', 'Cantidad']
+            fig_tickets = px.bar(ticket_counts, x='Ticket_Abierto', y='Cantidad', color='Ticket_Abierto', text='Cantidad', title='Cantidad de Registros: Tickets Abiertos = Si vs No', labels={'Ticket_Abierto': 'Estado del Ticket', 'Cantidad': 'Número de Registros'}, color_discrete_map={'Si': '#E91E63', 'No': '#4CAF50'})
+            fig_tickets.update_traces(textposition='outside')
+            fig_tickets.update_layout(showlegend=False, height=450)
+            st.plotly_chart(fig_tickets, use_container_width=True)
+            cant_si = ticket_counts[ticket_counts['Ticket_Abierto'] == 'Si']['Cantidad'].values
+            cant_no = ticket_counts[ticket_counts['Ticket_Abierto'] == 'No']['Cantidad'].values
+            cant_si = cant_si[0] if len(cant_si) > 0 else 0
+            cant_no = cant_no[0] if len(cant_no) > 0 else 0
+            total = cant_si + cant_no
+            col_m1, col_m2, col_m3 = st.columns(3)
+            col_m1.metric("Tickets Abiertos = Si", f"{cant_si:,}")
+            col_m2.metric("Tickets Abiertos = No", f"{cant_no:,}")
+            col_m3.metric("% Tickets Abiertos (Sí)", f"{(cant_si/total*100):.1f}%" if total > 0 else "0%")
+            st.dataframe(ticket_counts, use_container_width=True)
+        else:
+            st.info("ℹ️ Columna 'Ticket_Soporte_Abierto_Limpio' no encontrada.")
 
+    with tab_insights_ia:
+        st.header("Insights de IA")
+        st.caption("El análisis se basa exclusivamente en los filtros aplicados en el panel lateral.")
         # Build agent context from all data
         h_inv = compute_health_score(inv_raw, inv_clean)
         h_tx = compute_health_score(tx_raw, tx_clean)
@@ -1169,16 +1102,42 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         if not GROQ_AVAILABLE:
             st.error("⚠️ El paquete `groq` no está instalado. Ejecute: `pip install groq`")
         elif not groq_api_key:
-            st.info("Configure su API Key de Groq en el panel lateral (Configurar API Key) o en .streamlit/secrets.toml (GROQ_API_KEY) para habilitar el chat con el agente.")
+            st.info("Configure su API Key de Groq en el panel lateral (Configurar API Key) o en .streamlit/secrets.toml (GROQ_API_KEY) para habilitar los Insights de IA.")
         else:
-            # System prompt with full context
+            INSIGHT_PROMPT = """A partir del siguiente contexto del dashboard (datos ya filtrados por el usuario), genera entre 5 y 10 insights concretos y recomendaciones accionables. Responde en español, de forma clara y numerada. El contexto es exclusivamente el que se proporciona debajo."""
+
+            if st.button("🚀 Generar Insights con IA", type="primary", use_container_width=True):
+                with st.spinner("Generando insights con Llama-3..."):
+                    try:
+                        client = Groq(api_key=groq_api_key)
+                        response = client.chat.completions.create(
+                            model="llama-3.3-70b-versatile",
+                            messages=[
+                                {"role": "system", "content": INSIGHT_PROMPT + "\n\n--- CONTEXTO DEL DASHBOARD (filtros aplicados) ---\n\n" + agent_context},
+                                {"role": "user", "content": "Genera los insights y recomendaciones basados en el contexto anterior."},
+                            ],
+                            temperature=0.4,
+                        )
+                        st.session_state.insight_ia_result = response.choices[0].message.content
+                        st.session_state.insight_ia_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al contactar la API de Groq: {str(e)}")
+
+            if st.session_state.insight_ia_result:
+                st.subheader("📋 Insights y recomendaciones")
+                if st.session_state.insight_ia_timestamp:
+                    st.caption(f"Generado: {st.session_state.insight_ia_timestamp}")
+                st.markdown(st.session_state.insight_ia_result)
+                st.divider()
+
+            st.subheader("Chat con el agente (seguimiento)")
             SYSTEM_PROMPT = """Eres un asistente experto en análisis de datos, calidad de datos y business intelligence.
 Tienes acceso al contexto completo del análisis exploratorio de datos (EDA) y las métricas de calidad de un proyecto.
 El contexto incluye: resúmenes de inventario, transacciones, feedback, NPS, SKUs fantasma, márgenes negativos, logs de limpieza y comentarios del analista.
 Responde en español de forma clara y concisa. Da recomendaciones prácticas cuando sea apropiado.
 Si te preguntan algo fuera del contexto, indica amablemente que solo puedes responder sobre los datos cargados en el dashboard."""
 
-            # Display chat history
             for msg in st.session_state.chat_messages:
                 with st.chat_message(msg["role"]):
                     st.markdown(msg["content"])
