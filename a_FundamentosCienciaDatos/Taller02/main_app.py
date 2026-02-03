@@ -354,7 +354,9 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
         st.header("Análisis de Salud: Transacciones")
 
         # Gráfico de cantidades negativas
-        neg_qty_df = tx_raw[tx_raw['Cantidad_Vendida'] < 0]
+        neg_qty_df = pd.DataFrame()
+        if 'Cantidad_Vendida' in tx_raw.columns:
+            neg_qty_df = tx_raw[tx_raw['Cantidad_Vendida'] < 0]
         if not neg_qty_df.empty:
             st.subheader("Análisis de Cantidades Negativas")
             col_v1, col_v2 = st.columns(2)
@@ -569,7 +571,7 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
 
             col_m1.metric("Tickets Abiertos = Si", f"{cant_si:,}")
             col_m2.metric("Tickets Abiertos = No", f"{cant_no:,}")
-            col_m3.metric("% con Tickets", f"{(cant_si/total*100):.1f}%" if total > 0 else "0%")
+            col_m3.metric("% Tickets Abiertos (Sí)", f"{(cant_si/total*100):.1f}%" if total > 0 else "0%")
 
             st.dataframe(ticket_counts, use_container_width=True)
         else:
@@ -718,11 +720,13 @@ if uploaded_inv and uploaded_tx and uploaded_fb:
             st.pyplot(fig_ghost)
 
             with st.expander("Ver Tabla Detallada de SKUs Fantasma"):
-                # Agrupación para tabla detallada
-                ghost_details = ghost_skus_all.groupby('SKU_ID').agg({
+                # Agrupación para tabla detallada (Ingreso = Cantidad × Precio)
+                ghost_skus_agg = ghost_skus_all.copy()
+                ghost_skus_agg['_Ingreso'] = ghost_skus_agg['Cantidad_Vendida'] * ghost_skus_agg['Precio_Venta_Final']
+                ghost_details = ghost_skus_agg.groupby('SKU_ID').agg({
                     'Transaccion_ID': 'count',
                     'Cantidad_Vendida': 'sum',
-                    'Precio_Venta_Final': 'sum' # Esto es suma de precios, quizás mejor Ingreso
+                    '_Ingreso': 'sum'
                 }).reset_index()
                 ghost_details.columns = ['SKU_ID', 'Transacciones', 'Cant_Total', 'Ingreso_Total']
                 ghost_details = ghost_details.sort_values('Ingreso_Total', ascending=False)

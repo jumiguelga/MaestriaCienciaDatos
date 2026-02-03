@@ -117,7 +117,7 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
         )
         report["Stock negativo convertido a positivo"] = int(neg_stock)
 
-    # 5. Normalización de Bodega_Origen
+    # 4. Normalización de Bodega_Origen
     if "Bodega_Origen" in df.columns:
         before_bodega = (
                 df["Bodega_Origen"].notnull()
@@ -131,7 +131,7 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
         )
         report["Normalización de Bodega_Origen"] = int(before_bodega)
 
-    # 6. Normalización de Categoria
+    # 5. Normalización de Categoria
     if "Categoria" in df.columns:
         df["Categoria"] = (
             df["Categoria"]
@@ -141,7 +141,7 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
         )
         report["Normalización de Categoria"] = int(df["Categoria"].notnull().sum())
 
-    # 7. Rellenar nulos en Lead_Time_Dias y normalizar texto
+    # 6. Rellenar nulos en Lead_Time_Dias y normalizar texto
     affected_lead = 0
     if "Lead_Time_Dias" in df.columns:
         col = "Lead_Time_Dias"
@@ -151,7 +151,7 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
         df[col] = df[col].fillna("sin_definir").astype("string").str.lower()
     report["Rellenar nulos y normalizar Lead_Time_Dias"] = int(affected_lead)
 
-    # 8. Rellenar nulos en Stock_Actual con 0
+    # 7. Rellenar nulos en Stock_Actual con 0
     affected_stock_null = 0
     if "Stock_Actual" in df.columns:
         mask = df["Stock_Actual"].isnull()
@@ -160,7 +160,7 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
             df["Stock_Actual"], errors="coerce"
         ).fillna(0)
     report["Rellenar nulos en Stock_Actual con 0"] = int(affected_stock_null)
-    # 9. Detección de outliers (IQR)
+    # 8. Detección de outliers (IQR)
     if "Costo_Unitario_USD" in df.columns:
         df["outlier_costo"] = outlier_flag_iqr(df, "Costo_Unitario_USD")
         report["Outliers detectados en Costo_Unitario_USD"] = int(df["outlier_costo"].sum())
