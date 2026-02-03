@@ -175,30 +175,46 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
 # LIMPIEZA ESTÁNDAR: TRANSACCIONES
 # -------------------------------------------------------------------
 
-def sanitize_transacciones(dataframe: pd.DataFrame, normalize_status: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Sanea el DataFrame de transacciones y devuelve:
-    (DataFrame saneado, DataFrame resumen de filas afectadas por cada proceso).
-    """
+def sanitize_transacciones(
+    dataframe: pd.DataFrame, normalize_status: bool = True
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     df = dataframe.copy()
     report = {}
 
-    # 0. Normalización de texto básica
-    cat_cols = df.select_dtypes(include=["object", "string"]).columns
-    id_cols = ["SKU_ID", "Transaccion_ID", "Feedback_ID"]
-    for col in cat_cols:
-        if col in id_cols:
-            continue
-        df[col] = df[col].apply(normalize_text)
-
-    # 1. Conversión de fechas en 'Fecha_Venta'
+    # 0. Convertir columnas de fecha ANTES de normalizar texto
+    # 0.1 Fecha_Venta
     if "Fecha_Venta" in df.columns:
         before_invalid_dates = df["Fecha_Venta"].isnull().sum()
-        df["Fecha_Venta"] = pd.to_datetime(df["Fecha_Venta"], format="%d/%m/%Y", errors="coerce")
+        df["Fecha_Venta"] = pd.to_datetime(
+            df["Fecha_Venta"],
+            errors="coerce",
+            dayfirst=True,      # porque tu formato típico es 01/01/2025
+        )
         after_invalid_dates = df["Fecha_Venta"].isnull().sum()
         report["Conversión de fechas inválidas a NaT"] = int(
             after_invalid_dates - before_invalid_dates
         )
+
+    # 0.2 Ultima_Revision (si la tienes en este DF)
+    if "Ultima_Revision" in df.columns:
+        before_invalid_dates = df["Ultima_Revision"].isnull().sum()
+        df["Ultima_Revision"] = pd.to_datetime(
+            df["Ultima_Revision"],
+            errors="coerce",
+        )
+        after_invalid_dates = df["Ultima_Revision"].isnull().sum()
+        report["Conversión de fechas inválidas a NaT (Ultima_Revision)"] = int(
+            after_invalid_dates - before_invalid_dates
+        )
+
+    # 1. Normalización de texto básica (EXCLUYENDO fechas e IDs)
+    cat_cols = df.select_dtypes(include=["object", "string"]).columns
+    id_cols = ["SKU_ID", "Transaccion_ID", "Feedback_ID"]
+    date_cols = ["Fecha_Venta", "Ultima_Revision"]  # las que quieras proteger
+    for col in cat_cols:
+        if col in id_cols or col in date_cols:
+            continue
+        df[col] = df[col].apply(normalize_text)
 
     # 2. Corregir fechas futuras en 'Fecha_Venta' (ajustar el año al anterior)
     if "Fecha_Venta" in df.columns:
@@ -213,8 +229,8 @@ def sanitize_transacciones(dataframe: pd.DataFrame, normalize_status: bool = Tru
     # 3. Normalización de Ciudades Destino
     if "Ciudad_Destino" in df.columns:
         before_city = (
-                df["Ciudad_Destino"].notnull()
-                & df["Ciudad_Destino"].isin(dicts.mapping_ciudades_destino.keys())
+            df["Ciudad_Destino"].notnull()
+            & df["Ciudad_Destino"].isin(dicts.mapping_ciudades_destino.keys())
         ).sum()
         df["Ciudad_Destino"] = (
             df["Ciudad_Destino"]
@@ -227,8 +243,8 @@ def sanitize_transacciones(dataframe: pd.DataFrame, normalize_status: bool = Tru
     # 4. Normalización de Canal_Venta
     if "Canal_Venta" in df.columns:
         before_channel = (
-                df["Canal_Venta"].notnull()
-                & df["Canal_Venta"].isin(dicts.mapping_canal_venta.keys())
+            df["Canal_Venta"].notnull()
+            & df["Canal_Venta"].isin(dicts.mapping_canal_venta.keys())
         ).sum()
         df["Canal_Venta"] = (
             df["Canal_Venta"]
@@ -242,8 +258,8 @@ def sanitize_transacciones(dataframe: pd.DataFrame, normalize_status: bool = Tru
     if "Estado_Envio" in df.columns:
         if normalize_status:
             before_status = (
-                    df["Estado_Envio"].notnull()
-                    & df["Estado_Envio"].isin(dicts.mapping_estado_envio.keys())
+                df["Estado_Envio"].notnull()
+                & df["Estado_Envio"].isin(dicts.mapping_estado_envio.keys())
             ).sum()
             df["Estado_Envio"] = (
                 df["Estado_Envio"]
@@ -264,6 +280,7 @@ def sanitize_transacciones(dataframe: pd.DataFrame, normalize_status: bool = Tru
         list(report.items()), columns=["Proceso", "Filas_afectadas"]
     )
     return df, transacciones_report
+
 
 
 # -------------------------------------------------------------------
