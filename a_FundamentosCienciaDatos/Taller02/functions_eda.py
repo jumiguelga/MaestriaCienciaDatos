@@ -76,6 +76,18 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
     df = dataframe.copy()
     report = {}
 
+    # 0. Convertir Ultima_Revision a datetime ANTES de la normalización de texto
+    #    (normalize_text corrompe fechas como "2024-01-15" -> "2024 01 15")
+    if "Ultima_Revision" in df.columns:
+        before_invalid_dates = df["Ultima_Revision"].isnull().sum()
+        df["Ultima_Revision"] = pd.to_datetime(
+            df["Ultima_Revision"], errors="coerce"
+        )
+        after_invalid_dates = df["Ultima_Revision"].isnull().sum()
+        report["Conversión de fechas inválidas a NaT"] = int(
+            after_invalid_dates - before_invalid_dates
+        )
+
     # 1. Remover espacios en blanco y normalizar texto
     cat_cols = df.select_dtypes(include=["object", "string"]).columns
     affected_norm = 0
@@ -97,18 +109,7 @@ def sanitize_inventario(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
     if "lead_time_dias" in df.columns and "Lead_Time_Dias" not in df.columns:
         df = df.rename(columns={"lead_time_dias": "Lead_Time_Dias"})
 
-    # 3. Conversión de fechas en 'Ultima_Revision'
-    if "Ultima_Revision" in df.columns:
-        before_invalid_dates = df["Ultima_Revision"].isnull().sum()
-        df["Ultima_Revision"] = pd.to_datetime(
-            df["Ultima_Revision"], errors="coerce"
-        )
-        after_invalid_dates = df["Ultima_Revision"].isnull().sum()
-        report["Conversión de fechas inválidas a NaT"] = int(
-            after_invalid_dates - before_invalid_dates
-        )
-
-    # 4. Stock negativo a positivo
+    # 3. Stock negativo a positivo
     if "Stock_Actual" in df.columns:
         neg_stock = (df["Stock_Actual"] < 0).sum()
         df.loc[df["Stock_Actual"] < 0, "Stock_Actual"] = (
