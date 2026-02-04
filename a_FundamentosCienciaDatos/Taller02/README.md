@@ -20,49 +20,102 @@ Para iniciar el análisis, debe cargar los tres archivos CSV requeridos en el pa
 
 ---
 
-### 2. Exploración de Pestañas
+## 2. Exploración de pestañas
 
-#### 📈 Pestaña 1: EDA General
-Muestra un análisis detallado de cada dataset (Inventario, Transacciones, Feedback) dividido en:
-- **Estadísticas Descriptivas**: Resumen cuantitativo y cualitativo.
-- **Visualizaciones de Distribución**: Boxplots individuales para cada variable numérica para identificar la dispersión y outliers.
-- **Gráficos de Frecuencia**: Distribución de categorías principales (Categorías, Canales de Venta, Grupos NPS).
+### Pestaña Auditoría
 
-#### 📦 Pestaña 2: Salud Inventario
-- **Health Score**: Métrica porcentual de la integridad de los datos de inventario.
-- **Procesos de Limpieza**: Detalle de cuántas filas fueron afectadas por normalización de texto, corrección de stock negativo y mapeo de bodegas.
+En esta pestaña se realiza el análisis exploratorio clásico de cada dataset:
 
-#### 💸 Pestaña 3: Salud Transacciones
-- **Análisis de Cantidades Negativas**: Identificación y visualización de registros con ventas negativas.
-- **SKUs Fantasma**: Métricas sobre productos vendidos que no existen en el inventario cargado, incluyendo el impacto económico.
-- **Imputación KNN**: Opción en el sidebar para completar costos de envío faltantes mediante el algoritmo K-Nearest Neighbors.
+- Inventario: estadísticas descriptivas, boxplots por variable numérica, distribución por categoría.
+- Transacciones: estadísticas descriptivas, boxplots, distribución por canal de venta.
+- Feedback / NPS: estadísticas descriptivas, boxplots, distribución por grupos NPS.
+- Health Score por dataset (Inventario, Transacciones, Feedback) y métricas de nulos y filas filtradas.
+- Reporte de procesos de limpieza por dataset.
+- Comparativo “Registros originales vs limpios vs excluidos” con gráfico de barras apiladas.
+- Sección de “Decisiones éticas de limpieza” con:
+  - Log de acciones realizadas.
+  - Textarea para comentarios del analista (persisten durante la sesión).
+  - Tabla de resumen de decisiones de imputación y limpieza.
+  - Posible análisis antes/después para EdadCliente si se ajustan outliers.
 
-#### 😊 Pestaña 4: Salud NPS
-- **NPS Score Profesional**: Visualización avanzada que incluye:
-  - **Donut Chart**: Con el puntaje NPS final.
-  - **Distribución 0-10**: Gráfico con emojis y colores (Rojo: Detractores, Amarillo: Pasivos, Verde: Promotores).
-  - **Métricas Detalladas**: Porcentajes y conteos exactos por grupo.
-- **Ajuste de Outliers de Edad**: Botón para imputar edades > 100 años con la mediana de los datos válidos.
+### Pestaña Operaciones
 
-#### 📊 Pestaña 5: Reporte (Dashboard)
-Consolida los hallazgos más críticos del análisis:
-1. **Métricas de Calidad**: Comparativa Registros Raw vs Clean y pérdida de datos.
-2. **Decisiones Éticas**: Log de auditoría de todas las acciones realizadas y sección para **comentarios del analista** (estos comentarios persisten durante la sesión).
-3. **Dilema del SKU Fantasma**: Análisis de impacto en ventas de productos no inventariados.
-4. **Fuga de Capital**: Identificación de SKUs con margen neto negativo (pérdidas).
-5. **Crisis Logística**: Heatmap de correlación entre tiempo de entrega y satisfacción NPS, identificando rutas críticas que requieren atención inmediata.
+Enfocada en riesgos operativos y “dolores” del negocio:
 
-#### 🤖 Pestaña 6: Chat con Agente
-Pestaña de chat con un agente de IA (Groq) que tiene acceso al contexto completo del dashboard: resúmenes de datos, métricas, NPS, SKUs fantasma, márgenes, logs y comentarios del analista.
-- Configure su **API Key de Groq** en el panel lateral o en `.streamlit/secrets.toml` (variable `GROQ_API_KEY`).
-- Instale el paquete: `pip install groq`.
+- Análisis de SKUs fantasma:
+  - Métricas agregadas (SKUs únicos fantasma, % de ventas fantasma, transacciones afectadas).
+  - Top 10 SKUs fantasma por frecuencia y gráfico de barras.
+  - Tabla detallada por SKU (transacciones, cantidades, ingreso total).
+- Análisis de cantidades negativas:
+  - Tabla de ejemplos de transacciones con cantidad negativa.
+  - Histograma de distribución de cantidades negativas.
+- Análisis por bodega:
+  - Tabla con días promedio desde última revisión, tasa de tickets, NPS promedio, número de transacciones.
+  - Scatter de riesgo: días desde última revisión vs tasa de tickets, tamaño por transacciones, color por NPS, con zonas de riesgo y umbrales.
+  - Listado de bodegas críticas en “zona de alto riesgo”.
 
----
 
-### 📄 Exportación de Resultados
-Al final del panel lateral (Sidebar), encontrará el botón **"Generar Log PDF"**. Esto descargará un reporte formal que incluye:
-- El historial cronológico de todas las limpiezas realizadas.
-- Los comentarios y justificaciones éticas ingresados por el analista en la pestaña de Reporte.
+### Pestaña Cliente
+
+Foco en experiencia de cliente y NPS:
+
+- Cálculo del NPS (detractores, pasivos, promotores) a partir de SatisfacciónNPS.
+- Gráfico tipo “donut” con el score NPS general.
+- Métricas de conteo y porcentaje para cada grupo.
+- Visualizaciones adicionales relacionadas con feedback, tickets de soporte y su impacto en cliente:
+  - Comparativo “Tickets Abiertos: Sí vs No” con gráfico de barras y métricas.
+  - Tabla con los conteos de tickets si la columna está disponible.
+- (Opcional según datos cargados) análisis de outliers en EdadCliente y su relación con NPS.
+
+
+### Pestaña Insights de IA
+
+Pestaña de interacción con el agente de IA (Groq):
+
+- Requiere configurar `GROQAPIKEY` en `.streamlit/secrets.toml` o en el panel lateral, además de tener instalado `groq`.
+- El agente tiene acceso a:
+  - Resúmenes de inventario, transacciones, feedback.
+  - Health scores, NPS, métricas de SKUs fantasma, margen negativo.
+  - Logs de limpieza y comentarios del analista.
+- Permite:
+  - Chatear sobre los datos cargados en el dashboard (las preguntas se restringen al contexto del proyecto).
+  - Generar entre 5 y 10 insights y recomendaciones accionables con el botón **“Generar Insights con IA”**.
+- El resultado de insights se guarda en sesión y se muestra con marca de tiempo.
+
+
+## Requisitos
+
+- Python 3.10+ (recomendado).
+- Paquetes (ver `requirements.txt`):
+  - streamlit
+  - pandas, numpy
+  - matplotlib, seaborn, plotly
+  - scikit-learn
+  - reportlab
+  - groq (opcional, solo para la pestaña “Insights de IA”)
+
+Instalación rápida:
+
+```bash
+pip install -r requirements.txt
+```
+
+
+```markdown
+### Estructura esperada de datos
+
+El dashboard espera tres archivos CSV:
+
+- **Inventario**:
+  - `SKUID`, `StockActual`, `CostoUnitarioUSD`, `Categoria`, `BodegaOrigen`, `LeadTimeDias`, `UltimaRevision`
+- **Transacciones**:
+  - `TransaccionID`, `SKUID`, `FechaVenta`, `CantidadVendida`, `PrecioVentaFinal`, `CiudadDestino`, `CanalVenta`, `EstadoEnvio`
+- **Feedback**:
+  - `FeedbackID`, `TransaccionID`, `SatisfaccionNPS`, `ComentarioTexto`, `RecomiendaMarca`, `TicketSoporteAbierto`
+```
+
+## Reporte de Hallazgos
+Para ver el reporte de hallazgos puedes consultar el siguiente documento: [Reporte de Hallazgos](./ReporteDeHallazgos.md)!
 
 ---
 
