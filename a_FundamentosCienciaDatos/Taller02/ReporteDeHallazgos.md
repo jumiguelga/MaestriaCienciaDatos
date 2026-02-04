@@ -30,10 +30,6 @@ Este análisis nos ha permitido otorgar algunas recomendaciones bases con las qu
    - Sistemas que no se conversan entre sí.
 
 
-### 2.2 Alcance
-
-(PENDIENTE)
-
 ### 2.3 Objetivos de la auditoría / investigación
 
 - Fuga de Capital y Rentabilidad: Localizar los SKUs que se están vendiendo con
@@ -198,13 +194,11 @@ Tabla de resumen de calidad de datos:
 
 ## 8. Recomendaciones
 
-|Recomendación # | Severidad | Descripción breve                                     |
-|----------:||----------:|--------------------------------------------------------|
-|1|| Crítico   | Preparar una revisión de Inventario para actualizar el estado del Stock y los productos faltantes   |
-|2|| Crítico   | Ajustar los sistemas de información para reducir el error del factor humano al momento de instertar la data, limitando los formularios con valores por defecto  |
-|3|| Alto     | Efectuar un análisis de la calidad de la data con el fin de ajustar e imputar de forma correcta los valores faltantes o desconocidos, como categorías, ciudades de destino, estados de entrega, entre otros. |
-|4|| Alto      | Ajustar los Leads Times de acuerdo con la bodega de origen y la ciudad destino |
-|5|| Alto      | Re-distribuir las bodegas para que se focalicen en aquellas ciudades donde sus operaciones tienen una correlación positiva |
-|6|| Alto      | Priorizar la gestión de incidentes (tickets) abieros, y efectuar una campaña de fidelización con los clientes que vienen siendo detractores del servicio |
-
-
+| Recomendación # | Severidad | Descripción breve                                                                                                                                                           |
+|----------------:|-----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1               | Crítico   | Preparar una revisión de inventario para actualizar el estado del stock y los productos faltantes.                                                                          |
+| 2               | Crítico   | Ajustar los sistemas de información para reducir el error del factor humano al momento de insertar la data, limitando los formularios con valores por defecto.            |
+| 3               | Alto      | Efectuar un análisis de la calidad de la data con el fin de ajustar e imputar de forma correcta los valores faltantes o desconocidos, como categorías, ciudades de destino, estados de entrega, entre otros. |
+| 4               | Alto      | Ajustar los lead times de acuerdo con la bodega de origen y la ciudad destino.                                                                                              |
+| 5               | Alto      | Re-distribuir las bodegas para que se focalicen en aquellas ciudades donde sus operaciones tienen una correlación positiva.                                                 |
+| 6               | Alto      | Priorizar la gestión de incidentes (tickets) abiertos y efectuar una campaña de fidelización con los clientes que vienen siendo detractores del servicio.                  |
