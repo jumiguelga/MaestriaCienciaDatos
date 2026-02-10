@@ -13,6 +13,23 @@ try:
 except ImportError:
     GROQ_AVAILABLE = False
 
+GROQ_MODEL = "llama-3.3-70b-versatile"
+
+
+def _call_groq(client: "Groq", system_prompt: str, user_content: str) -> str:
+    """Llama a la API de Groq y retorna el texto de la respuesta."""
+    try:
+        response = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+        )
+        return response.choices[0].message.content or ""
+    except Exception as e:
+        return f"Error al llamar a Groq: {e}"
+
 
 def _try_convert_to_numeric(ser: pd.Series):
     """
@@ -722,12 +739,121 @@ if df is not None:
             st.info("Configura tu API Key de Groq en la barra lateral para habilitar los insights generados por IA.")
         else:
             try:
-                st.session_state["groq_client"] = Groq(api_key=groq_key)
-                st.success("Conexión con Groq configurada correctamente.")
-                st.caption("Los insights de IA se generarán aquí. Detalles pendientes de configuración.")
+                groq_client = Groq(api_key=groq_key)
+                st.session_state["groq_client"] = groq_client
             except Exception as e:
                 st.session_state.pop("groq_client", None)
                 st.error(f"Error al configurar Groq: {e}")
+                groq_client = None
+
+            if groq_client and "df_filtrado" in st.session_state:
+                df_ins = st.session_state["df_filtrado"].copy()
+                meta = st.session_state.get("column_metadata", {})
+                numeric_cols = meta.get("numeric", [])
+                categorical_cols = meta.get("categorical", [])
+                boolean_cols = meta.get("boolean", [])
+
+                # Layout: main (75%) | chat (25%)
+                col_main, col_chat = st.columns([3, 1])
+                with col_main:
+                    # Resumen del dataset para Groq
+                    n_rows, n_cols = len(df_ins), len(df_ins.columns)
+                    missing = df_ins.isna().sum()
+                    missing_pct = (missing / n_rows * 100).round(1)
+                    cols_with_missing = [c for c in df_ins.columns if missing[c] > 0]
+                    missing_summary = "\n".join(
+                        [f"- {c}: {int(missing[c])} nulos ({missing_pct[c]}%)" for c in cols_with_missing[:20]]
+                    ) if cols_with_missing else "Ninguna columna con valores faltantes."
+                    desc = df_ins[numeric_cols].describe().round(2).to_string() if numeric_cols else "Sin columnas numéricas."
+
+                    dataset_context = f"""
+Dataset: {n_rows} filas, {n_cols} columnas.
+Columnas numéricas: {numeric_cols[:15]}
+Columnas categóricas: {categorical_cols[:15]}
+Columnas booleanas: {boolean_cols[:10]}
+Valores faltantes por columna:
+{missing_summary}
+Estadísticas descriptivas (numéricas):
+{desc}
+"""
+
+                    # 1. Análisis general y recomendaciones
+                    st.markdown("#### Análisis general del dataset")
+                    if st.button("Generar análisis general", key="insights_general"):
+                        with st.spinner("Analizando..."):
+                            sys_prompt = """Eres un experto en ciencia de datos. Analiza el resumen del dataset y proporciona recomendaciones concisas en español.
+Incluye: situaciones generales en las columnas, patrones que observes, y sugerencias de mejora. Responde en español, con viñetas claras."""
+                            resp = _call_groq(groq_client, sys_prompt, dataset_context)
+                            st.session_state["insights_general_text"] = resp
+                    if "insights_general_text" in st.session_state:
+                        st.markdown(st.session_state["insights_general_text"])
+
+                    # 2. Heatmap de correlación + notas de Groq
+                    if len(numeric_cols) >= 2:
+                        st.markdown("#### Correlaciones")
+                        corr_df = df_ins[numeric_cols].corr()
+                        fig_corr = px.imshow(
+                            corr_df,
+                            text_auto=".2f",
+                            color_continuous_scale="RdBu_r",
+                            aspect="auto",
+                            title="Matriz de correlación",
+                        )
+                        fig_corr.update_layout(margin=dict(l=0, r=0, t=40, b=0), height=350)
+                        st.plotly_chart(fig_corr, use_container_width=True)
+                        corr_context = f"Matriz de correlación (columnas): {list(corr_df.columns)}\nValores:\n{corr_df.round(2).to_string()}"
+                        if st.button("Generar notas sobre correlaciones", key="insights_corr"):
+                            with st.spinner("Analizando correlaciones..."):
+                                sys_prompt = """Eres un experto en estadística. Analiza la matriz de correlación y escribe notas breves en español.
+Identifica: correlaciones fuertes (>0.7 o <-0.7), posibles multicolinealidad, y qué pares de variables podrían ser útiles o redundantes. Responde en español con viñetas."""
+                                resp = _call_groq(groq_client, sys_prompt, corr_context)
+                                st.session_state["insights_corr_text"] = resp
+                        if "insights_corr_text" in st.session_state:
+                            with st.expander("Notas sobre correlaciones"):
+                                st.markdown(st.session_state["insights_corr_text"])
+
+                    # 3. Imputación
+                    st.markdown("#### Valores faltantes e imputación")
+                    if cols_with_missing:
+                        imp_context = f"""Columnas con valores faltantes y porcentajes:
+{missing_summary}
+Columnas numéricas: {numeric_cols}
+Columnas categóricas: {categorical_cols}"""
+                        if st.button("Sugerir método de imputación", key="insights_imp"):
+                            with st.spinner("Analizando valores faltantes..."):
+                                sys_prompt = """Eres un experto en ciencia de datos. El usuario tiene un dataset con valores faltantes.
+Sugiere qué método de imputación usar (media, mediana, moda, etc.) para cada tipo de columna, y por qué.
+Responde en español con recomendaciones claras y viñetas."""
+                                resp = _call_groq(groq_client, sys_prompt, imp_context)
+                                st.session_state["insights_imp_text"] = resp
+                        if "insights_imp_text" in st.session_state:
+                            with st.expander("Recomendaciones de imputación"):
+                                st.markdown(st.session_state["insights_imp_text"])
+                    else:
+                        st.caption("No se detectaron valores faltantes significativos.")
+
+                with col_chat:
+                    st.markdown("##### Chat")
+                    if "insights_chat" not in st.session_state:
+                        st.session_state["insights_chat"] = []
+                    for msg in st.session_state["insights_chat"]:
+                        with st.chat_message(msg["role"]):
+                            st.markdown(msg["content"])
+                    if prompt := st.chat_input("Pregunta sobre el dataset..."):
+                        st.session_state["insights_chat"].append({"role": "user", "content": prompt})
+                        with st.chat_message("user"):
+                            st.markdown(prompt)
+                        with st.chat_message("assistant"):
+                            chat_context = f"Contexto del dataset: {dataset_context}\n\nConversación reciente: " + "\n".join(
+                                [f"{m['role']}: {m['content']}" for m in st.session_state["insights_chat"][-6:]]
+                            )
+                            sys_prompt = "Eres un asistente experto en análisis de datos. Responde en español de forma concisa y útil."
+                            resp = _call_groq(groq_client, sys_prompt, chat_context)
+                            st.markdown(resp)
+                        st.session_state["insights_chat"].append({"role": "assistant", "content": resp})
+                        st.rerun()
+            elif groq_client:
+                st.info("Ejecuta primero el procesamiento en la pestaña **Ingesta y Procesamiento de Datos (ETL)** para generar insights.")
 
 else:
     st.info("👈 Selecciona una fuente de datos en la barra lateral y carga tu dataset para comenzar.")
