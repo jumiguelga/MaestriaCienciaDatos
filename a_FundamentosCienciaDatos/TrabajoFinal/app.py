@@ -5,6 +5,48 @@ import io
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.express as px
+
+
+def donut_issue_chart(count_issue: int, total: int, titulo: str, etiqueta_issue: str, etiqueta_ok: str) -> None:
+    """
+    Muestra un gráfico tipo donut (pie chart con agujero) para resumir
+    la proporción de filas con problema vs filas sin problema.
+    """
+    if total <= 0:
+        return
+
+    count_issue = int(count_issue)
+    total = int(total)
+    count_ok = max(total - count_issue, 0)
+
+    data = pd.DataFrame(
+        {
+            "estado": [etiqueta_issue, etiqueta_ok],
+            "filas": [count_issue, count_ok],
+        }
+    )
+
+    fig = px.pie(
+        data,
+        names="estado",
+        values="filas",
+        hole=0.6,
+        color="estado",
+        color_discrete_map={
+            etiqueta_issue: "#e74c3c",  # rojo para filas con problema
+            etiqueta_ok: "#2ecc71",     # verde para filas sin problema
+        },
+    )
+    fig.update_traces(textinfo="percent", textfont_size=14)
+    fig.update_layout(
+        title=titulo,
+        showlegend=True,
+        margin=dict(l=0, r=0, t=40, b=0),
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
 
 # Configuración de la página
 st.set_page_config(
@@ -235,6 +277,33 @@ if df is not None:
         with col3:
             pct_at = 100 * n_atipicos / len(df_proc) if len(df_proc) else 0
             st.metric("% filas con atípicos", f"{pct_at:.1f}%")
+
+        # Gráficos resumen por tipo de problema en una sola fila
+        c_nulos, c_dup, c_atip = st.columns(3)
+        with c_nulos:
+            donut_issue_chart(
+                count_issue=n_filas_nulas,
+                total=len(df_proc),
+                titulo="Distribución de filas con nulos",
+                etiqueta_issue="Con nulos",
+                etiqueta_ok="Sin nulos",
+            )
+        with c_dup:
+            donut_issue_chart(
+                count_issue=n_dup,
+                total=len(df_proc),
+                titulo="Distribución de filas duplicadas",
+                etiqueta_issue="Duplicadas",
+                etiqueta_ok="Únicas",
+            )
+        with c_atip:
+            donut_issue_chart(
+                count_issue=n_atipicos,
+                total=len(df_proc),
+                titulo="Distribución de filas con valores atípicos",
+                etiqueta_issue="Con atípicos",
+                etiqueta_ok="Sin atípicos",
+            )
 
         st.divider()
         st.subheader("Resumen del procesamiento")
