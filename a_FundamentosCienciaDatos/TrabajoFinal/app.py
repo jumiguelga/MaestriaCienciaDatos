@@ -7,6 +7,12 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 
+try:
+    from groq import Groq
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+
 
 def _try_convert_to_numeric(ser: pd.Series):
     """
@@ -185,6 +191,19 @@ if df is not None:
         index=0,
     )
     st.session_state["index_column"] = index_column
+
+# API Groq para Insights de IA (siempre visible)
+st.sidebar.markdown("---")
+st.sidebar.subheader("🤖 Groq IA (Insights)")
+groq_api_key = st.sidebar.text_input(
+    "API Key de Groq",
+    type="password",
+    placeholder="gsk_...",
+    help="Obtén tu API key en console.groq.com. Se usa para generar insights automáticos en la pestaña Insights de IA.",
+    key="groq_api_key",
+)
+if groq_api_key:
+    st.sidebar.caption("API Key configurada.")
 
 # =============================================================================
 # MAIN: DISPLAY (df.info, df.head)
@@ -692,6 +711,23 @@ if df is not None:
                         st.dataframe(pd.DataFrame({"columna": list(modas.keys()), "moda": list(modas.values())}), use_container_width=True, hide_index=True)
                     csv = df_viz.to_csv(index=False).encode("utf-8")
                     st.download_button("Descargar dataset filtrado (CSV)", csv, "dataset_filtrado.csv", "text/csv", key="rep_dl")
+
+    with tab_insights_ia:
+        st.subheader("Insights de IA")
+        groq_key = st.session_state.get("groq_api_key", "")
+        if not GROQ_AVAILABLE:
+            st.warning("La librería `groq` no está instalada. Ejecuta: `pip install groq`")
+        elif not groq_key:
+            st.session_state.pop("groq_client", None)
+            st.info("Configura tu API Key de Groq en la barra lateral para habilitar los insights generados por IA.")
+        else:
+            try:
+                st.session_state["groq_client"] = Groq(api_key=groq_key)
+                st.success("Conexión con Groq configurada correctamente.")
+                st.caption("Los insights de IA se generarán aquí. Detalles pendientes de configuración.")
+            except Exception as e:
+                st.session_state.pop("groq_client", None)
+                st.error(f"Error al configurar Groq: {e}")
 
 else:
     st.info("👈 Selecciona una fuente de datos en la barra lateral y carga tu dataset para comenzar.")
