@@ -145,6 +145,15 @@ if df is not None:
         help="Si se marca, se eliminarán las filas marcadas con valores atípicos.",
     )
 
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🔑 Columna índice / identificador")
+    index_column = st.sidebar.selectbox(
+        "Selecciona la columna identificadora (no se usará para análisis estadístico).",
+        options=df.columns.tolist(),
+        index=0,
+    )
+    st.session_state["index_column"] = index_column
+
 # =============================================================================
 # MAIN: DISPLAY (df.info, df.head)
 # =============================================================================
