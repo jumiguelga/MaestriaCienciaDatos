@@ -116,6 +116,36 @@ elif data_source == "URL":
             st.sidebar.error(f"Error al cargar desde la URL: {str(e)}")
 
 # =============================================================================
+# SIDEBAR: GLOBAL FILTERS / DATA TREATMENT
+# =============================================================================
+
+delete_duplicates = False
+imputation_method = "Sin imputación"
+treat_outliers = False
+
+if df is not None:
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("⚙️ Filtros y tratamiento de datos")
+
+    delete_duplicates = st.sidebar.checkbox(
+        "Eliminar filas duplicadas",
+        value=False,
+        help="Si se marca, se eliminarán las filas detectadas como duplicadas.",
+    )
+
+    imputation_method = st.sidebar.selectbox(
+        "Método de imputación numérica",
+        options=["Sin imputación", "Media", "Mediana", "Cero"],
+        help="Cómo imputar valores numéricos faltantes (NaN).",
+    )
+
+    treat_outliers = st.sidebar.checkbox(
+        "Eliminar filas con valores atípicos",
+        value=False,
+        help="Si se marca, se eliminarán las filas marcadas con valores atípicos.",
+    )
+
+# =============================================================================
 # MAIN: DISPLAY (df.info, df.head)
 # =============================================================================
 
@@ -305,14 +335,87 @@ if df is not None:
                 etiqueta_ok="Sin atípicos",
             )
 
+        # Aplicar filtros globales configurados en la barra lateral
+        df_filtrado = df_proc.copy()
+
+        # Imputación numérica
+        valores_imputados = 0
+        if imputation_method != "Sin imputación":
+            columnas_numericas_tratadas = [
+                c
+                for c in df_filtrado.select_dtypes(include=[np.number]).columns
+                if c not in ("Nulos", "Duplicados", "Valores Atípicos")
+            ]
+            for col in columnas_numericas_tratadas:
+                n_nan_antes = df_filtrado[col].isna().sum()
+                if n_nan_antes == 0:
+                    continue
+                if imputation_method == "Media":
+                    valor = df_filtrado[col].mean()
+                elif imputation_method == "Mediana":
+                    valor = df_filtrado[col].median()
+                else:  # "Cero"
+                    valor = 0
+                df_filtrado[col] = df_filtrado[col].fillna(valor)
+                valores_imputados += n_nan_antes
+
+        filas_antes_filtros = len(df_filtrado)
+
+        # Eliminación de duplicados
+        filas_eliminadas_duplicados = 0
+        if delete_duplicates:
+            if "Duplicados" in df_filtrado.columns:
+                filas_eliminadas_duplicados = int(df_filtrado["Duplicados"].sum())
+                df_filtrado = df_filtrado[~df_filtrado["Duplicados"]]
+
+        # Eliminación de filas con valores atípicos
+        filas_eliminadas_atipicos = 0
+        if treat_outliers:
+            if "Valores Atípicos" in df_filtrado.columns:
+                filas_eliminadas_atipicos = int(df_filtrado["Valores Atípicos"].sum())
+                df_filtrado = df_filtrado[~df_filtrado["Valores Atípicos"]]
+
+        filas_despues_filtros = len(df_filtrado)
+
+        # Guardar dataset filtrado en sesión para futuras pestañas
+        st.session_state["df_filtrado"] = df_filtrado
+
         st.divider()
         st.subheader("Resumen del procesamiento")
         st.success(
-            f"Dataset procesado: {df_proc.shape[0]} filas, {df_proc.shape[1]} columnas. "
+            f"Dataset procesado: {df_proc.shape[0]} filas originales, {df_filtrado.shape[0]} filas tras filtros, "
+            f"{df_proc.shape[1]} columnas. "
             "Se aplicó: reemplazo de vacíos por NaN; sanitización de categóricas (trim de espacios y conversión a minúsculas); "
             "detección de nulos, duplicados y valores atípicos; columnas con solo dos valores (ej. sí/no) tratadas como booleanas y mostradas como 1/0. "
             "Revisa las secciones anteriores para los detalles."
         )
+
+        st.markdown("**Filtros de tratamiento seleccionados**")
+        if (
+            imputation_method == "Sin imputación"
+            and not delete_duplicates
+            and not treat_outliers
+        ):
+            st.caption("No se aplicó ningún filtro adicional sobre el dataset.")
+        else:
+            if imputation_method != "Sin imputación":
+                st.markdown(
+                    f"- Imputación numérica: **{imputation_method}** "
+                    f"(valores imputados: {valores_imputados})."
+                )
+            if delete_duplicates:
+                st.markdown(
+                    f"- Eliminación de duplicados: **{filas_eliminadas_duplicados}** filas marcadas como duplicadas."
+                )
+            if treat_outliers:
+                st.markdown(
+                    f"- Eliminación de valores atípicos: **{filas_eliminadas_atipicos}** filas marcadas con valores atípicos."
+                )
+            if filas_antes_filtros != filas_despues_filtros:
+                st.markdown(
+                    f"- Filas totales antes de filtros: **{filas_antes_filtros}**; "
+                    f"después de filtros: **{filas_despues_filtros}**."
+                )
 
 else:
     st.info("👈 Selecciona una fuente de datos en la barra lateral y carga tu dataset para comenzar.")
