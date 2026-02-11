@@ -1,0 +1,25 @@
+[theme]
+# Heredar temas light y dark para permitir alternar
+base = "light"
+
+# Color principal: #004B85
+primaryColor = "#004B85"
+
+# Colores para gráficos (Plotly, Altair, Vega-Lite)
+chartCategoricalColors = ["#004B85", "#FFB903", "#0066a8", "#ffc933", "#007acc", "#ffd966"]
+chartSequentialColors = ["#004B85", "#0066a8", "#0082c9", "#ffb903", "#FFB903"]
+chartDivergingColors = ["#004B85", "#ffffff", "#FFB903"]
+
+# Tema oscuro: mismo primaryColor, fondos adaptados
+[theme.dark]
+primaryColor = "#004B85"
+backgroundColor = "#0e1117"
+secondaryBackgroundColor = "#262730"
+textColor = "#fafafa"
+
+# Tema claro
+[theme.light]
+primaryColor = "#004B85"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f0f2f6"
+textColor = "#31333f"

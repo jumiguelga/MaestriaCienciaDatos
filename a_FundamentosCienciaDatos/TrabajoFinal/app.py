@@ -89,8 +89,8 @@ def donut_issue_chart(count_issue: int, total: int, titulo: str, etiqueta_issue:
         hole=0.6,
         color="estado",
         color_discrete_map={
-            etiqueta_issue: "#e74c3c",  # rojo para filas con problema
-            etiqueta_ok: "#2ecc71",     # verde para filas sin problema
+            etiqueta_issue: "#FFB903",  # secundario: filas con problema
+            etiqueta_ok: "#004B85",     # principal: filas sin problema
         },
     )
     fig.update_traces(textinfo="percent", textfont_size=14)
