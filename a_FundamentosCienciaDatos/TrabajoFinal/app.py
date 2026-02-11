@@ -481,8 +481,19 @@ if df is not None:
 
         filas_despues_filtros = len(df_filtrado)
 
-        # Guardar dataset filtrado en sesión para futuras pestañas
-        st.session_state["df_filtrado"] = df_filtrado
+        # Aplicar columnas derivadas guardadas (persisten entre recargas)
+        for defn in st.session_state.get("derived_columns", []):
+            col_a, col_b, op, new_name = defn
+            if col_a in df_filtrado.columns and col_b in df_filtrado.columns:
+                a, b = df_filtrado[col_a], df_filtrado[col_b]
+                if op == "+":
+                    df_filtrado[new_name] = a + b
+                elif op == "-":
+                    df_filtrado[new_name] = a - b
+                elif op == "*":
+                    df_filtrado[new_name] = a * b
+                else:
+                    df_filtrado[new_name] = np.where(b != 0, a / b, np.nan)
 
         # Column metadata para EDA: excluir index_column y columnas auxiliares
         exclude_cols = {"Nulos", "Duplicados", "Valores Atípicos"}
@@ -505,12 +516,38 @@ if df is not None:
             if c not in exclude_cols and pd.api.types.is_datetime64_any_dtype(df_filtrado[c])
         ]
 
+        # Columna derivada: operación aritmética entre dos columnas numéricas
+        if "derived_columns" not in st.session_state:
+            st.session_state["derived_columns"] = []
+        if len(numeric_cols_for_eda) >= 2:
+            with st.expander("Crear columna derivada (operación aritmética)", expanded=False):
+                if st.session_state.get("derived_columns"):
+                    st.caption("Columnas derivadas activas: " + ", ".join(d[3] for d in st.session_state["derived_columns"]))
+                    if st.button("Eliminar todas las columnas derivadas", key="clear_derived"):
+                        st.session_state["derived_columns"] = []
+                        st.rerun()
+                ops = {"Suma": "+", "Resta": "-", "Multiplicación": "*", "División": "/"}
+                op_labels = list(ops.keys())
+                col_a = st.selectbox("Primera columna", numeric_cols_for_eda, key="derived_col_a")
+                col_b = st.selectbox("Segunda columna", [c for c in numeric_cols_for_eda if c != col_a], key="derived_col_b")
+                op_sel = st.selectbox("Operación", op_labels, key="derived_op")
+                new_col_name = st.text_input("Nombre de la nueva columna", value=f"{col_a}_{ops[op_sel]}_{col_b}".replace(" ", "_"), key="derived_col_name")
+                if st.button("Crear columna", key="create_derived"):
+                    if not new_col_name or not new_col_name.strip():
+                        st.warning("Ingresa un nombre para la nueva columna.")
+                    elif new_col_name in df_filtrado.columns:
+                        st.error(f"La columna '{new_col_name}' ya existe.")
+                    else:
+                        st.session_state["derived_columns"] = st.session_state.get("derived_columns", []) + [(col_a, col_b, ops[op_sel], new_col_name.strip())]
+                        st.success(f"Columna **{new_col_name}** creada.")
+                        st.rerun()
         st.session_state["column_metadata"] = {
             "numeric": numeric_cols_for_eda,
             "categorical": categorical_cols_for_eda,
             "boolean": boolean_cols_for_eda,
             "datetime": datetime_cols_for_eda,
         }
+        st.session_state["df_filtrado"] = df_filtrado
 
         st.divider()
         st.subheader("Resumen del procesamiento")
