@@ -230,6 +230,15 @@ if groq_api_key:
 st.title("📊 Panel inteligente")
 
 if df is not None:
+    # Inicializar Groq client temprano para que esté disponible en EDA e Insights
+    if GROQ_AVAILABLE and st.session_state.get("groq_api_key"):
+        try:
+            st.session_state["groq_client"] = Groq(api_key=st.session_state["groq_api_key"])
+        except Exception:
+            st.session_state.pop("groq_client", None)
+    else:
+        st.session_state.pop("groq_client", None)
+
     tab_ingesta, tab_visualizacion, tab_insights_ia = st.tabs(["Ingesta y Procesamiento de Datos (ETL)", "Visualización Dinámica (EDA)", "Insights de IA"])
 
     with tab_ingesta:
@@ -616,6 +625,18 @@ if df is not None:
                                 fig_box = px.box(df_viz, y=num_sel, title=f"Boxplot: {num_sel}")
                                 fig_box.update_layout(margin=dict(l=0, r=0, t=40, b=0))
                                 st.plotly_chart(fig_box, use_container_width=True)
+                            _gc = st.session_state.get("groq_client")
+                            if _gc and GROQ_AVAILABLE:
+                                if st.button("Resumen con IA (histograma y boxplot)", key="uni_num_insight"):
+                                    with st.spinner("Analizando..."):
+                                        ctx = f"Columna numérica: {num_sel}. Datos filtrados: {len(df_viz)} filas.\nEstadísticas:\n{df_viz[num_sel].describe().to_string()}"
+                                        _prompt = "Analiza el histograma y boxplot de esta columna numérica. Da un resumen breve en español: forma de la distribución, posibles valores atípicos, tendencia central. Responde en español con viñetas."
+                                        _r = _call_groq(_gc, _prompt, ctx)
+                                        st.session_state["uni_num_insight_text"] = _r
+                                        st.session_state["uni_num_insight_col"] = num_sel
+                                if "uni_num_insight_text" in st.session_state and st.session_state.get("uni_num_insight_col") == num_sel:
+                                    with st.expander("Resumen IA"):
+                                        st.markdown(st.session_state["uni_num_insight_text"])
                     # Categorical
                     if categorical_cols:
                         with st.expander("Columnas categóricas", expanded=True):
@@ -632,6 +653,18 @@ if df is not None:
                             fig_bar = px.bar(counts, x="categoria", y=y_col, title=f"Distribución: {cat_sel}")
                             fig_bar.update_layout(margin=dict(l=0, r=0, t=40, b=0), xaxis_tickangle=-45)
                             st.plotly_chart(fig_bar, use_container_width=True)
+                            _gc = st.session_state.get("groq_client")
+                            if _gc and GROQ_AVAILABLE:
+                                if st.button("Resumen con IA (gráfico de barras)", key="uni_cat_insight"):
+                                    with st.spinner("Analizando..."):
+                                        ctx = f"Columna categórica: {cat_sel}. Datos filtrados: {len(df_viz)} filas.\nDistribución (categoría → conteo):\n{counts.to_string()}"
+                                        _prompt = "Analiza el gráfico de barras de esta columna categórica. Da un resumen breve en español: categorías dominantes, desbalance, patrones observados. Responde en español con viñetas."
+                                        _r = _call_groq(_gc, _prompt, ctx)
+                                        st.session_state["uni_cat_insight_text"] = _r
+                                        st.session_state["uni_cat_insight_col"] = cat_sel
+                                if "uni_cat_insight_text" in st.session_state and st.session_state.get("uni_cat_insight_col") == cat_sel:
+                                    with st.expander("Resumen IA"):
+                                        st.markdown(st.session_state["uni_cat_insight_text"])
                     # Boolean
                     if boolean_cols:
                         with st.expander("Columnas booleanas", expanded=True):
@@ -641,6 +674,18 @@ if df is not None:
                             fig_bool = px.bar(vc, x="valor", y="conteo", title=f"Distribución: {bool_sel}")
                             fig_bool.update_layout(margin=dict(l=0, r=0, t=40, b=0))
                             st.plotly_chart(fig_bool, use_container_width=True)
+                            _gc = st.session_state.get("groq_client")
+                            if _gc and GROQ_AVAILABLE:
+                                if st.button("Resumen con IA (gráfico booleano)", key="uni_bool_insight"):
+                                    with st.spinner("Analizando..."):
+                                        ctx = f"Columna booleana: {bool_sel}. Datos filtrados: {len(df_viz)} filas.\nDistribución:\n{vc.to_string()}"
+                                        _prompt = "Analiza el gráfico de esta columna booleana. Da un resumen breve en español: proporción de cada valor, si hay desbalance, implicaciones. Responde en español con viñetas."
+                                        _r = _call_groq(_gc, _prompt, ctx)
+                                        st.session_state["uni_bool_insight_text"] = _r
+                                        st.session_state["uni_bool_insight_col"] = bool_sel
+                                if "uni_bool_insight_text" in st.session_state and st.session_state.get("uni_bool_insight_col") == bool_sel:
+                                    with st.expander("Resumen IA"):
+                                        st.markdown(st.session_state["uni_bool_insight_text"])
                     if not numeric_cols and not categorical_cols and not boolean_cols:
                         st.caption("No hay columnas disponibles para análisis univariado.")
 
@@ -659,6 +704,17 @@ if df is not None:
                             )
                             fig_corr.update_layout(margin=dict(l=0, r=0, t=40, b=0), height=400)
                             st.plotly_chart(fig_corr, use_container_width=True)
+                            _gc = st.session_state.get("groq_client")
+                            if _gc and GROQ_AVAILABLE:
+                                if st.button("Resumen con IA (heatmap correlaciones)", key="bi_heatmap_insight"):
+                                    with st.spinner("Analizando..."):
+                                        ctx = f"Matriz de correlación. Datos filtrados: {len(df_viz)} filas.\n{corr_df.round(2).to_string()}"
+                                        _prompt = "Analiza el heatmap de correlaciones. Da un resumen breve en español: correlaciones fuertes, multicolinealidad, pares de variables relevantes. Responde en español con viñetas."
+                                        _r = _call_groq(_gc, _prompt, ctx)
+                                        st.session_state["bi_heatmap_insight_text"] = _r
+                                if "bi_heatmap_insight_text" in st.session_state:
+                                    with st.expander("Resumen IA"):
+                                        st.markdown(st.session_state["bi_heatmap_insight_text"])
                     else:
                         st.caption("Se requieren al menos 2 columnas numéricas para el heatmap de correlaciones.")
                     # Evolución temporal
@@ -684,6 +740,18 @@ if df is not None:
                                 fig_ts = px.line(ts, x=dt_col, y=agg_col, title=f"Evolución temporal ({agg_col} - {agg_func})")
                             fig_ts.update_layout(margin=dict(l=0, r=0, t=40, b=0))
                             st.plotly_chart(fig_ts, use_container_width=True)
+                            _gc = st.session_state.get("groq_client")
+                            if _gc and GROQ_AVAILABLE:
+                                if st.button("Resumen con IA (serie temporal)", key="bi_ts_insight"):
+                                    with st.spinner("Analizando..."):
+                                        y_col_ts = "conteo" if agg_col == "(Conteo)" else agg_col
+                                        ctx = f"Serie temporal: eje X={dt_col}, Y={y_col_ts}. Agregación: {agg_func}. Datos: {len(ts)} puntos.\n{ts.head(20).to_string()}\n..."
+                                        _prompt = "Analiza la serie temporal. Da un resumen breve en español: tendencia, estacionalidad, picos o valles relevantes. Responde en español con viñetas."
+                                        _r = _call_groq(_gc, _prompt, ctx)
+                                        st.session_state["bi_ts_insight_text"] = _r
+                                if "bi_ts_insight_text" in st.session_state:
+                                    with st.expander("Resumen IA"):
+                                        st.markdown(st.session_state["bi_ts_insight_text"])
                     else:
                         st.caption("No se encontraron columnas de fecha para evolución temporal.")
                     # Cross-tabs opcionales
@@ -694,6 +762,19 @@ if df is not None:
                             fig_cross = px.box(df_viz, x=bi_cat, y=bi_num, title=f"{bi_num} por {bi_cat}")
                             fig_cross.update_layout(margin=dict(l=0, r=0, t=40, b=0), xaxis_tickangle=-45)
                             st.plotly_chart(fig_cross, use_container_width=True)
+                            _gc = st.session_state.get("groq_client")
+                            if _gc and GROQ_AVAILABLE:
+                                if st.button("Resumen con IA (boxplot num vs cat)", key="bi_box_insight"):
+                                    with st.spinner("Analizando..."):
+                                        grp = df_viz.groupby(bi_cat)[bi_num].describe()
+                                        ctx = f"Boxplot: {bi_num} por {bi_cat}. Datos filtrados: {len(df_viz)} filas.\nEstadísticas por categoría:\n{grp.round(2).to_string()}"
+                                        _prompt = "Analiza el boxplot numérico vs categórico. Da un resumen breve en español: diferencias entre categorías, outliers, variabilidad. Responde en español con viñetas."
+                                        _r = _call_groq(_gc, _prompt, ctx)
+                                        st.session_state["bi_box_insight_text"] = _r
+                                        st.session_state["bi_box_insight_keys"] = (bi_num, bi_cat)
+                                if "bi_box_insight_text" in st.session_state and st.session_state.get("bi_box_insight_keys") == (bi_num, bi_cat):
+                                    with st.expander("Resumen IA"):
+                                        st.markdown(st.session_state["bi_box_insight_text"])
                     if len(numeric_cols) >= 2:
                         with st.expander("Numérico vs numérico (scatter)", expanded=False):
                             sc_x = st.selectbox("Eje X", numeric_cols, key="sc_x")
@@ -703,7 +784,7 @@ if df is not None:
                                 fig_sc = px.scatter(df_viz, x=sc_x, y=sc_y, title=f"{sc_x} vs {sc_y}")
                                 fig_sc.update_layout(margin=dict(l=0, r=0, t=40, b=0))
                                 st.plotly_chart(fig_sc, use_container_width=True)
-
+                               
                 with tab_rep:
                     st.subheader("Reporte")
                     col1, col2, col3, col4 = st.columns(4)
@@ -719,6 +800,17 @@ if df is not None:
                     st.subheader("Resumen estadístico (columnas numéricas)")
                     if numeric_cols:
                         st.dataframe(df_viz[numeric_cols].describe(), use_container_width=True)
+                        _gc = st.session_state.get("groq_client")
+                        if _gc and GROQ_AVAILABLE:
+                            if st.button("Comentarios IA sobre resumen estadístico", key="rep_describe_insight"):
+                                with st.spinner("Analizando..."):
+                                    ctx = f"Resumen estadístico (df.describe). Datos filtrados: {len(df_viz)} filas, {len(numeric_cols)} columnas numéricas.\n{df_viz[numeric_cols].describe().round(2).to_string()}"
+                                    _prompt = "Comenta brevemente el resumen estadístico. Destaca hallazgos clave: dispersión, asimetría, columnas con mayor variabilidad, posibles problemas. Responde en español con viñetas."
+                                    _r = _call_groq(_gc, _prompt, ctx)
+                                    st.session_state["rep_describe_insight_text"] = _r
+                            if "rep_describe_insight_text" in st.session_state:
+                                with st.expander("Comentarios IA"):
+                                    st.markdown(st.session_state["rep_describe_insight_text"])
                     else:
                         st.caption("No hay columnas numéricas.")
                     st.subheader("Moda por columna categórica/booleana")
@@ -728,6 +820,7 @@ if df is not None:
                         st.dataframe(pd.DataFrame({"columna": list(modas.keys()), "moda": list(modas.values())}), use_container_width=True, hide_index=True)
                     csv = df_viz.to_csv(index=False).encode("utf-8")
                     st.download_button("Descargar dataset filtrado (CSV)", csv, "dataset_filtrado.csv", "text/csv", key="rep_dl")
+                    
 
     with tab_insights_ia:
         st.subheader("Insights de IA")
@@ -738,15 +831,10 @@ if df is not None:
             st.session_state.pop("groq_client", None)
             st.info("Configura tu API Key de Groq en la barra lateral para habilitar los insights generados por IA.")
         else:
-            try:
-                groq_client = Groq(api_key=groq_key)
-                st.session_state["groq_client"] = groq_client
-            except Exception as e:
-                st.session_state.pop("groq_client", None)
-                st.error(f"Error al configurar Groq: {e}")
-                groq_client = None
-
-            if groq_client and "df_filtrado" in st.session_state:
+            groq_client = st.session_state.get("groq_client")
+            if groq_client is None:
+                st.error("No se pudo conectar con Groq. Verifica tu API Key.")
+            elif "df_filtrado" in st.session_state:
                 df_ins = st.session_state["df_filtrado"].copy()
                 meta = st.session_state.get("column_metadata", {})
                 numeric_cols = meta.get("numeric", [])
