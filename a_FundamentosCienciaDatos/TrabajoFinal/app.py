@@ -834,6 +834,19 @@ Responde en español con recomendaciones claras y viñetas."""
 
                 with col_chat:
                     st.markdown("##### Chat")
+                    # Hacer la columna del chat scrollable (solo el contenido, sin extender la página)
+                    st.markdown(
+                        """
+                        <style>
+                        /* Columna de chat scrollable para evitar que la página crezca */
+                        div[data-testid="column"]:has(div[data-testid="stChatMessage"]) {
+                            max-height: 70vh;
+                            overflow-y: auto;
+                        }
+                        </style>
+                        """,
+                        unsafe_allow_html=True,
+                    )
                     if "insights_chat" not in st.session_state:
                         st.session_state["insights_chat"] = []
                     for msg in st.session_state["insights_chat"]:
