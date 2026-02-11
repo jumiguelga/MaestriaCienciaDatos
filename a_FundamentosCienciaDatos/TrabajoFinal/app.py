@@ -777,15 +777,20 @@ Estadísticas descriptivas (numéricas):
 {desc}
 """
 
-                    # 1. Análisis general y recomendaciones
-                    st.markdown("#### Análisis general del dataset")
-                    if st.button("Generar análisis general", key="insights_general"):
-                        with st.spinner("Analizando..."):
-                            sys_prompt = """Eres un experto en ciencia de datos. Analiza el resumen del dataset y proporciona recomendaciones concisas en español.
-Incluye: situaciones generales en las columnas, patrones que observes, y sugerencias de mejora. Responde en español, con viñetas claras."""
+                    # 1. Generar Insights con IA (requerido: df.describe + tendencias, riesgos, oportunidades)
+                    # st.markdown("#### Insights con IA")
+                    if st.button("Generar Insights con IA", key="insights_general"):
+                        with st.spinner("Generando insights..."):
+                            sys_prompt = """Eres un analista virtual experto en ciencia de datos. Recibirás el resumen estadístico (df.describe) del DataFrame filtrado.
+Tu tarea es interpretar estos datos en lenguaje natural y proporcionar:
+1. TENDENCIAS: patrones o comportamientos detectados en las variables.
+2. RIESGOS: aspectos que puedan indicar problemas o sesgos en los datos.
+3. OPORTUNIDADES: hallazgos que sugieran mejoras o acciones recomendables.
+Responde en español, de forma clara y estructurada con viñetas para cada sección."""
                             resp = _call_groq(groq_client, sys_prompt, dataset_context)
                             st.session_state["insights_general_text"] = resp
                     if "insights_general_text" in st.session_state:
+                        st.caption("Interpretación basada en el resumen estadístico (df.describe) del DataFrame filtrado.")
                         st.markdown(st.session_state["insights_general_text"])
 
                     # 2. Heatmap de correlación + notas de Groq
